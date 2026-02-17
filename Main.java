@@ -1,7 +1,8 @@
-import src.dice.DiceEnum;
+import src.skills.SkillEnum;
+
 public class Main {
     public static void main(String[] args) {
-        for (DiceEnum dice : DiceEnum.values()) {
+        for (SkillEnum dice : SkillEnum.values()) {
             System.out.println(dice);
         }
     }
