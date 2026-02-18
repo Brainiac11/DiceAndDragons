@@ -11,7 +11,7 @@ public class ArmourClass {
         return armourClass;
     }
 
-    public double getReducedDamage(double damage){
+    public double getReducedDamage(double damage) {
         return damage;
     }
 }

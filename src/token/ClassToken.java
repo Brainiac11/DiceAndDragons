@@ -1,5 +1,5 @@
 package src.token;
 
-public abstract class ClassToken extends Token{
-    
+public abstract class ClassToken extends Token {
+
 }
