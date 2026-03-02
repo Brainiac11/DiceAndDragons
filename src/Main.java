@@ -1,3 +1,5 @@
+package src;
+
 import src.skills.SkillEnum;
 
 public class Main {
