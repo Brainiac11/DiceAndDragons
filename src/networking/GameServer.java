@@ -2,10 +2,12 @@ package src.networking;
 
 import java.io.*;
 import java.net.*;
+import java.util.ArrayList;
 import java.util.function.Consumer;
 
 public class GameServer {
     private ServerSocket serverSocket;
+    private ArrayList<Socket> sockets = new ArrayList<>();
     private Consumer<String> onConnected;
 
     public GameServer() throws IOException {
@@ -20,10 +22,19 @@ public class GameServer {
         this.onConnected = callback;
     }
 
+    public boolean hasConnections(){
+        return serverSocket.isBound();
+    }
+
+    public ArrayList<Socket> getConnections(){
+        return sockets;
+    }
+
     public void startListening() {
         Thread thread = new Thread(() -> {
             try {
                 Socket clientSocket = serverSocket.accept();
+                sockets.add(clientSocket);
                 ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
                 out.flush();
                 ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream());
@@ -42,7 +53,6 @@ public class GameServer {
         thread.setDaemon(true);
         thread.start();
     }
-
     public void close() {
         try {
             if (serverSocket != null && !serverSocket.isClosed()) {

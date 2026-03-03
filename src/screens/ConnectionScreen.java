@@ -23,10 +23,12 @@ public class ConnectionScreen extends JFrame {
         JLabel statusLabel = new JLabel("statis ");
         JLabel sentLabel = new JLabel("sent ");
         JLabel receivedLabel = new JLabel("recieved ");
+        JLabel dataLabel = new JLabel("Data");
         JTextField ipField = new JTextField("localhost", 12);
         JTextField portField = new JTextField(7);
         JButton hostBtn = new JButton("Host Host");
         JButton joinBtn = new JButton("Join Join");
+        JButton startGameBtn = new JButton("Start Game");
 
         add(new JLabel("ip "));
         add(ipField);
@@ -38,6 +40,8 @@ public class ConnectionScreen extends JFrame {
         add(statusLabel);
         add(sentLabel);
         add(receivedLabel);
+        add(startGameBtn);
+        add(dataLabel);
 
         hostBtn.addActionListener(e -> {
             try {
@@ -78,6 +82,22 @@ public class ConnectionScreen extends JFrame {
                         receivedLabel.setText("recieved " + received);
                     },
                     error -> statusLabel.setText("static failure + =" + error));
+        });
+
+        startGameBtn.addActionListener(e -> {
+            try {
+                if (!server.hasConnections()) {
+                    System.out.println("NO CONNECTIONS");
+                    dataLabel.setText("None");
+                }
+                else{
+                    client.send("Hello");
+                    dataLabel.setText("Hello");
+                }
+            } catch(Exception ea){
+                System.out.println("Need to start game");
+                ea.printStackTrace();
+            }
         });
 
         button = new JButton("123, ABC");

@@ -20,6 +20,13 @@ public class GameClient {
         }
     }
 
+    public void send(Object object) throws IOException {
+        ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+        out.writeObject(object);
+    }
+
+
+
     // theads
     public void connectAsync(String ip, int port, Consumer<String> onConnected, Consumer<String> onError) {
         Thread thread = new Thread(() -> {
