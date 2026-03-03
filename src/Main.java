@@ -1,11 +1,11 @@
 package src;
 
-import src.skills.SkillEnum;
+import src.screens.ConnectionScreen;
+import java.awt.EventQueue;
 
 public class Main {
     public static void main(String[] args) {
-        for (SkillEnum dice : SkillEnum.values()) {
-            System.out.println(dice);
-        }
+        ConnectionScreen screen = new ConnectionScreen();
+        screen.setVisible(true);
     }
 }
