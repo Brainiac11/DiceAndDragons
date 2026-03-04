@@ -2,10 +2,12 @@ package src.screens;
 
 import src.networking.GameClient;
 import src.networking.GameServer;
+import src.networking.GameSubscriber;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
+import java.net.Socket;
 
 public class ConnectionScreen extends JFrame {
     public JButton button;
@@ -13,22 +15,25 @@ public class ConnectionScreen extends JFrame {
     private GameServer server;
     private GameClient client;
 
+    private final JLabel receivedLabel = new JLabel("recieved ");
+    private final JLabel serverIdLabel = new JLabel("serve id ");
+    private final JLabel statusLabel = new JLabel("statis ");
+    private final static JLabel dataLabel = new JLabel("Data");
+    private final JLabel sentLabel = new JLabel("sent ");
+
+    private final JTextField ipField = new JTextField("localhost", 12);
+    private final JTextField portField = new JTextField(7);
+    private final JButton hostBtn = new JButton("Host Host");
+    private final JButton joinBtn = new JButton("Join Join");
+    private final JButton startGameBtn = new JButton("Start Game");
+
     public ConnectionScreen() {
         super("Dice and Dragons");
         setSize(560, 267);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new FlowLayout());
 
-        JLabel serverIdLabel = new JLabel("serve id ");
-        JLabel statusLabel = new JLabel("statis ");
-        JLabel sentLabel = new JLabel("sent ");
-        JLabel receivedLabel = new JLabel("recieved ");
-        JLabel dataLabel = new JLabel("Data");
-        JTextField ipField = new JTextField("localhost", 12);
-        JTextField portField = new JTextField(7);
-        JButton hostBtn = new JButton("Host Host");
-        JButton joinBtn = new JButton("Join Join");
-        JButton startGameBtn = new JButton("Start Game");
+
 
         add(new JLabel("ip "));
         add(ipField);
@@ -82,17 +87,21 @@ public class ConnectionScreen extends JFrame {
                         receivedLabel.setText("recieved " + received);
                     },
                     error -> statusLabel.setText("static failure + =" + error));
+
         });
 
         startGameBtn.addActionListener(e -> {
             try {
-                if (!server.hasConnections()) {
+                if (server==null || !server.hasConnections()) {
                     System.out.println("NO CONNECTIONS");
                     dataLabel.setText("None");
                 }
                 else{
-                    client.send("Hello");
-                    dataLabel.setText("Hello");
+                    for (GameSubscriber subscriber: server.getConnections()){
+                        subscriber.send("Hello" + Math.random());
+                    }
+                    dataLabel.setText("Hello" + Math.random());
+                    System.out.println("aada");
                 }
             } catch(Exception ea){
                 System.out.println("Need to start game");
@@ -102,4 +111,9 @@ public class ConnectionScreen extends JFrame {
 
         button = new JButton("123, ABC");
     }
+
+    public static JLabel dataLabel(){
+        return dataLabel;
+    }
+
 }

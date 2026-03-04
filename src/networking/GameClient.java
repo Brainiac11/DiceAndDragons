@@ -1,11 +1,14 @@
 package src.networking;
 
+import src.screens.ConnectionScreen;
+
 import java.io.*;
 import java.net.*;
 import java.util.function.Consumer;
 
 public class GameClient {
     private Socket socket;
+    private Object data;
 
     public void connect(String ip, int port, Consumer<String> onConnected) throws IOException, ClassNotFoundException {
         socket = new Socket(ip, port);
@@ -32,6 +35,7 @@ public class GameClient {
         Thread thread = new Thread(() -> {
             try {
                 connect(ip, port, onConnected);
+                updateDataAsync();
             } catch (Exception e) {
                 if (onError != null) {
                     onError.accept(e.getMessage());
@@ -40,6 +44,25 @@ public class GameClient {
         });
         thread.setDaemon(true);
         thread.start();
+    }
+
+    public void updateDataAsync(){
+        Thread thread = new Thread(() -> {
+            try{
+                ObjectInputStream inputStream = new ObjectInputStream((socket.getInputStream()));
+                data =  inputStream.readObject();
+                changeConnectionScreen();
+            } catch (IOException | ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    public void changeConnectionScreen(){
+        ConnectionScreen.dataLabel().setText((String) data);
+        updateDataAsync();
     }
 
     public void close() {

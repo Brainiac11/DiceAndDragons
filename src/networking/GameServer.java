@@ -7,7 +7,7 @@ import java.util.function.Consumer;
 
 public class GameServer {
     private ServerSocket serverSocket;
-    private ArrayList<Socket> sockets = new ArrayList<>();
+    private ArrayList<GameSubscriber> sockets = new ArrayList<>();
     private Consumer<String> onConnected;
 
     public GameServer() throws IOException {
@@ -26,7 +26,7 @@ public class GameServer {
         return serverSocket.isBound();
     }
 
-    public ArrayList<Socket> getConnections(){
+    public ArrayList<GameSubscriber> getConnections(){
         return sockets;
     }
 
@@ -34,7 +34,7 @@ public class GameServer {
         Thread thread = new Thread(() -> {
             try {
                 Socket clientSocket = serverSocket.accept();
-                sockets.add(clientSocket);
+                sockets.add(new GameSubscriber(clientSocket));
                 ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
                 out.flush();
                 ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream());
