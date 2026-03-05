@@ -7,13 +7,14 @@ import src.networking.GameSubscriber;
 import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
-import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ConnectionScreen extends JFrame {
     public JButton button;
 
     private GameServer server;
-    private GameClient client;
+    private ArrayList<GameClient> clients = new ArrayList<>();
 
     private final JLabel receivedLabel = new JLabel("recieved ");
     private final JLabel serverIdLabel = new JLabel("serve id ");
@@ -58,7 +59,8 @@ public class ConnectionScreen extends JFrame {
                     sentLabel.setText("sent connection successful ");
                     receivedLabel.setText("recieved " + received);
                 });
-                server.startListening();
+                Thread thread = new Thread(server);
+                thread.start();
             } catch (IOException ex) {
                 statusLabel.setText("static " + ex.getMessage());
             }
@@ -79,8 +81,8 @@ public class ConnectionScreen extends JFrame {
                 return;
             }
             statusLabel.setText("statiuc connecting ");
-            client = new GameClient();
-            client.connectAsync(ip, port,
+            clients.add(new GameClient());
+            clients.getLast().connectAsync(ip, port,
                     received -> {
                         statusLabel.setText("connected");
                         sentLabel.setText("sent conencton susccesful");
@@ -97,10 +99,11 @@ public class ConnectionScreen extends JFrame {
                     dataLabel.setText("None");
                 }
                 else{
+                    ArrayList<String> spp = new ArrayList<>( List.of("h", "e", "l", "l", "o", " ", String.valueOf(Math.random())));
                     for (GameSubscriber subscriber: server.getConnections()){
-                        subscriber.send("Hello" + Math.random());
+                        subscriber.send(spp);
                     }
-                    dataLabel.setText("Hello" + Math.random());
+                    dataLabel.setText(spp.toString());
                     System.out.println("aada");
                 }
             } catch(Exception ea){

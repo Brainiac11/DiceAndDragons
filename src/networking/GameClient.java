@@ -61,7 +61,7 @@ public class GameClient {
     }
 
     public void changeConnectionScreen(){
-        ConnectionScreen.dataLabel().setText((String) data);
+        ConnectionScreen.dataLabel().setText(data.toString());
         updateDataAsync();
     }
 

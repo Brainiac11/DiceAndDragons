@@ -5,7 +5,7 @@ import java.net.*;
 import java.util.ArrayList;
 import java.util.function.Consumer;
 
-public class GameServer {
+public class GameServer implements Runnable {
     private ServerSocket serverSocket;
     private ArrayList<GameSubscriber> sockets = new ArrayList<>();
     private Consumer<String> onConnected;
@@ -43,7 +43,9 @@ public class GameServer {
                 String received = (String) in.readObject();
                 if (onConnected != null) {
                     onConnected.accept(received);
+                    startListening();
                 }
+
             } catch (Exception e) {
                 if (!serverSocket.isClosed()) {
                     e.printStackTrace();
@@ -61,5 +63,10 @@ public class GameServer {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    @Override
+    public void run() {
+        startListening();
     }
 }
