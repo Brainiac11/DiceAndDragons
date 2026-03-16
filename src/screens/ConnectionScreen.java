@@ -65,7 +65,6 @@ public class ConnectionScreen extends JFrame {
 
         JButton b1 = new JButton("Host Game");
         JButton b2 = new JButton("Join Game");
-
         stat = new JLabel(" ");
         p1.add(new JLabel("Handle"));
         p1.add(name);
@@ -76,7 +75,6 @@ public class ConnectionScreen extends JFrame {
         p1.add(b1);
         p1.add(b2);
         p1.add(stat);
-
         b1.addActionListener(e -> doHost());
         b2.addActionListener(e -> doJoin());
     }
