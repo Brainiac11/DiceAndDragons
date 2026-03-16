@@ -1,76 +1,65 @@
 package src.networking;
 
-import src.screens.ConnectionScreen;
-
-import java.io.*;
-import java.net.*;
-import java.util.function.Consumer;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 
 public class GameClient {
     private Socket socket;
-    private Object data;
+    private ObjectInputStream in;
+    private ObjectOutputStream out;
 
-    public void connect(String ip, int port, Consumer<String> onConnected) throws IOException, ClassNotFoundException {
-        socket = new Socket(ip, port);
-        ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-        ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+    public LobbyState connect(String ip, int port, String handle) throws Exception {
+        socket = new Socket();
+        socket.connect(new InetSocketAddress(ip, port));
+
+        out = new ObjectOutputStream(socket.getOutputStream());
         out.flush();
-        String received = (String) in.readObject();
-        out.writeObject("Connectada");
+
+        in = new ObjectInputStream(socket.getInputStream());
+
+
+        out.writeObject(new GameMessage(GameMessage.JOIN_REQUEST, handle));
         out.flush();
-        if (onConnected != null) {
-            onConnected.accept(received);
+
+        GameMessage response = (GameMessage) in.readObject();
+        // System.out.println("resonones: " + response.type);
+        if (response.type.equals(GameMessage.JOIN_REJECTED)) {
+            socket.close();
+            throw new Exception("Connecton failes");
+        }
+        return response.lobbyState;
+    }
+
+    public LobbyState readUpdateToLobby() throws IOException, ClassNotFoundException {
+        while (true) {
+            GameMessage msg = (GameMessage) in.readObject();
+            if (msg != null && GameMessage.LOBBY_UPDATE.equals(msg.type)) {
+                return msg.lobbyState;
+            }
         }
     }
 
-    public void send(Object object) throws IOException {
-        ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-        out.writeObject(object);
+    public void selectHero(String hero) throws IOException {
+        out.writeObject(new GameMessage(GameMessage.HERO_SELECT, hero));
+        System.out.println("hero selected: " + hero);
+        out.flush();
     }
 
-
-
-    // theads
-    public void connectAsync(String ip, int port, Consumer<String> onConnected, Consumer<String> onError) {
-        Thread thread = new Thread(() -> {
-            try {
-                connect(ip, port, onConnected);
-                updateDataAsync();
-            } catch (Exception e) {
-                if (onError != null) {
-                    onError.accept(e.getMessage());
-                }
-            }
-        });
-        thread.setDaemon(true);
-        thread.start();
-    }
-
-    public void updateDataAsync(){
-        Thread thread = new Thread(() -> {
-            try{
-                ObjectInputStream inputStream = new ObjectInputStream((socket.getInputStream()));
-                data =  inputStream.readObject();
-                changeConnectionScreen();
-            } catch (IOException | ClassNotFoundException e) {
-                throw new RuntimeException(e);
-            }
-        });
-        thread.setDaemon(true);
-        thread.start();
-    }
-
-    public void changeConnectionScreen(){
-        ConnectionScreen.dataLabel().setText(data.toString());
-        updateDataAsync();
+    public void sendChatMessage(String message) throws IOException {
+        out.writeObject(new GameMessage(GameMessage.CHAT, message));
+        System.out.println(message);
+        out.flush();
     }
 
     public void close() {
         try {
-            if (socket != null && !socket.isClosed()) {
+            if (socket != null) {
                 socket.close();
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
