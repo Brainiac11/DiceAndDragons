@@ -16,6 +16,7 @@ import src.networking.GameClient;
 import src.networking.GameServer;
 import src.networking.LobbyState;
 import src.networking.PlayerInfo;
+import src.players.Heroes;
 
 public class ConnectionScreen extends JFrame {
     private static final String HERO_PLACEHOLDER = "Select an Hero";
@@ -90,7 +91,7 @@ public class ConnectionScreen extends JFrame {
         ppl.setEditable(false);
 
         // placeholders for now when i acc get everything oorkingn
-        hero = new JComboBox<>(new String[] { HERO_PLACEHOLDER, "1", "2", "3", "4" });
+        hero = new JComboBox<>(new String[] { HERO_PLACEHOLDER, Heroes.WARRIOR, Heroes.WIZARD, Heroes.CLERIC, Heroes.RANGER, Heroes.ROGUE });
 
         chat = new JTextArea(16, 37);
         chat.setEditable(false);
@@ -123,9 +124,16 @@ public class ConnectionScreen extends JFrame {
     }
 
     private void openMain() {
-        setContentPane(p1);
-        revalidate();
-        repaint();
+        try {
+
+            this.remove(p2);
+            this.add(p1);
+            setContentPane(p1);
+            revalidate();
+            repaint();
+        } catch(Exception e){
+            e.printStackTrace();
+        }
     }
 
     private void openLobby() {
@@ -270,6 +278,7 @@ public class ConnectionScreen extends JFrame {
 
     private void leaveRoom() {
         stopAll();
+        myPick = null;
         openMain();
         stat.setText("Lobby left");
     }

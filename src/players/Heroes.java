@@ -6,6 +6,14 @@ import src.armour.ArmourClass;
 import src.item.Item;
 
 public class Heroes {
+    public static final String WARRIOR = "Warrior";
+    public static final String WIZARD = "Wizard";
+    public static final String CLERIC = "Cleric";
+    public static final String RANGER = "Ranger";
+    public static final String ROGUE = "Rogue";
+
+
+
     private int hitPoints;
 
     public int getHitPoints() {

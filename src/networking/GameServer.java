@@ -149,7 +149,7 @@ public class GameServer {
     }
 
     private synchronized boolean isTheHandleAlreadyTaken(String handle) {
-        // 1st is thee worst 2nd is the best 3rd is the one who f*cks around
+        // 1st is thee worst 2nd is the best
         if (handle.equalsIgnoreCase(hostHandle)) {
             return true;
         }
@@ -210,6 +210,7 @@ public class GameServer {
     }
 
     public void close() {
+        //sok 🫠
         try {
             if (serverSocket != null) {
                 serverSocket.close();
