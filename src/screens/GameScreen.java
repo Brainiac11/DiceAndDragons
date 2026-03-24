@@ -1,33 +1,40 @@
 package src.screens;
 
+import src.interactableImages.InteractableImage;
+
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.awt.image.ImageObserver;
 import java.io.File;
 
 public class GameScreen extends JPanel {
-    BufferedImage image;
-    BufferedImage image1;
+    private InteractableImage image;
     public GameScreen(){
         setSize(800, 670);
+        setLayout(new FlowLayout());
         makeImages();
     }
     public void makeImages(){
         try {
-            image = ImageIO.read(new File("imgs/blue_dragon.png"));
-            image1 = ImageIO.read(new File("imgs/young_red_dragon.png"));
+            image = new InteractableImage("imgs/blank_sheet.png", this::mouseRegister);
+            image.scaleImageDimensions(0.3);
+            this.add(image);
         } catch (Exception e){
             e.printStackTrace();
         }
     }
 
+    public void mouseRegister(MouseEvent e){
+        System.out.println(e.getX());
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        g.drawImage(image, 0, 0, image.getWidth() /  4,image.getHeight() / 4,this);
-        g.drawImage(image1, 100, 100, image1.getWidth() /  4,image1.getHeight() / 4,this);
+//        image.paint(g);
 
     }
 }
