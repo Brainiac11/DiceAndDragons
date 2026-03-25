@@ -23,6 +23,7 @@ public class InteractableImage extends JLabel implements MouseListener{
         super.setIcon(new ImageIcon(image));
         width = image.getWidth();
         height = image.getHeight();
+        this.addMouseListener(this);
     }
 
     @Override
@@ -44,7 +45,6 @@ public class InteractableImage extends JLabel implements MouseListener{
 
     @Override
     public void mouseReleased(MouseEvent e) {
-        System.out.println("helo");
         mouseEventListener.accept(e);
     }
 

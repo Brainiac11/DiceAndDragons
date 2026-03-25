@@ -64,7 +64,8 @@ public class GameServer {
     }
 
     public synchronized void startGame() {
-        chatLog.add("*****Host Started the Game***");
+        chatLog.add("*****Host Started the Game*****");
+
         broadcastLobbyState();
     }
 
@@ -203,6 +204,16 @@ public class GameServer {
         for (GameSubscriber client : clients) {
             try {
                 client.send(new GameMessage(GameMessage.LOBBY_UPDATE, state));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public synchronized void sendGameMessage(GameMessage message){
+        for (GameSubscriber client : clients) {
+            try {
+                client.send(message);
             } catch (Exception e) {
                 e.printStackTrace();
             }

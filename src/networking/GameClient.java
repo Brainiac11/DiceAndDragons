@@ -5,6 +5,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.Objects;
 
 public class GameClient {
     private Socket socket;
@@ -33,11 +34,11 @@ public class GameClient {
         return response.lobbyState;
     }
 
-    public LobbyState readUpdateToLobby() throws IOException, ClassNotFoundException {
+    public GameMessage readUpdateToLobby() throws IOException, ClassNotFoundException {
         while (true) {
             GameMessage msg = (GameMessage) in.readObject();
-            if (msg != null && GameMessage.LOBBY_UPDATE.equals(msg.type)) {
-                return msg.lobbyState;
+            if (msg != null && (GameMessage.LOBBY_UPDATE.equals(msg.type)) || GameMessage.START.equals(Objects.requireNonNull(msg).type)) {
+                return msg;
             }
         }
     }

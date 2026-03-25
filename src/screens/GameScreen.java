@@ -28,7 +28,7 @@ public class GameScreen extends JPanel {
     }
 
     public void mouseRegister(MouseEvent e){
-        System.out.println(e.getX());
+        System.out.println(e.getY());
     }
 
     @Override
