@@ -65,8 +65,12 @@ public class GameServer {
 
     public synchronized void startGame() {
         chatLog.add("*****Host Started the Game*****");
-
+        sendGameMessage(new GameMessage(GameMessage.START, ""));
         broadcastLobbyState();
+    }
+
+    public synchronized void startGameNonHost(){
+        System.out.println("STARITNG THE AME");
     }
 
     public void startListening() {
@@ -123,6 +127,10 @@ public class GameServer {
             // holy bandaid ts code sucks
             while (!wetSock.isClosed()) {
                 GameMessage in = (GameMessage) sub.read();
+                System.out.println(in.type);
+                if (in.type.equals(GameMessage.START)) {
+                    startGameNonHost();
+                }
                 if (in.type.equals(GameMessage.HERO_SELECT)) {
                     changeHeroe(handle, in.text);
                     broadcastLobbyState();
@@ -133,6 +141,7 @@ public class GameServer {
                         broadcastLobbyState();
                     }
                 }
+
             }
         } catch (Exception e) {
             // smth happened with client but miht jsut remeove this accc such bad code
@@ -213,6 +222,7 @@ public class GameServer {
     public synchronized void sendGameMessage(GameMessage message){
         for (GameSubscriber client : clients) {
             try {
+                System.out.println("HHHEE");
                 client.send(message);
             } catch (Exception e) {
                 e.printStackTrace();

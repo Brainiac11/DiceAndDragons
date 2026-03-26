@@ -12,8 +12,10 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.Timer;
-
-import src.networking.*;
+import src.networking.GameClient;
+import src.networking.GameServer;
+import src.networking.LobbyState;
+import src.networking.PlayerInfo;
 import src.players.Heroes;
 
 public class ConnectionScreen extends JFrame {
@@ -272,11 +274,6 @@ public class ConnectionScreen extends JFrame {
         }
         s.startGame();
         sub.setText("Game started@");
-        this.setVisible(false);
-        this.setEnabled(false);
-        GameSetupScreen screen = new GameSetupScreen();
-        screen.setEnabled(true);
-        screen.setVisible(true);
     }
 
     private void leaveRoom() {
@@ -287,12 +284,10 @@ public class ConnectionScreen extends JFrame {
     }
 
     // this is so cancer
-    private void updateThePaintOnLobby(GameMessage gt) {
-        LobbyState st = gt.lobbyState;
+    private void updateThePaintOnLobby(LobbyState st) {
         if (st == null) {
             return;
         }
-//        if(!host && s.)
         String x = "";
         for (PlayerInfo p : st.players) {
             String hh = (p.hero == null || p.hero.isEmpty()) ? "No Hero" : p.hero;

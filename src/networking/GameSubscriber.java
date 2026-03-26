@@ -25,7 +25,6 @@ public class GameSubscriber {
     public Object read() {
         try {
             return input.readObject();
-
         } catch (Exception e) {
             return null;
         }
