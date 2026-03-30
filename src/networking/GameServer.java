@@ -42,6 +42,11 @@ public class GameServer {
         return new LobbyState(copyPlayers, new ArrayList<>(chatLog), allReady);
     }
 
+//    public synchronized  GameMessage getCurrentGameMessage(){
+//
+//        GameMessage gm = new GameMessage();
+//    }
+
     public synchronized void setHostHero(String hero) {
         for (PlayerInfo p : players) {
             if (p.handle.equals(hostHandle)) {
@@ -127,18 +132,19 @@ public class GameServer {
             // holy bandaid ts code sucks
             while (!wetSock.isClosed()) {
                 GameMessage in = (GameMessage) sub.read();
-                System.out.println(in.type);
-                if (in.type.equals(GameMessage.START)) {
-                    startGameNonHost();
-                }
-                if (in.type.equals(GameMessage.HERO_SELECT)) {
-                    changeHeroe(handle, in.text);
-                    broadcastLobbyState();
-                } else if (in.type.equals(GameMessage.CHAT)) {
-                    String cleanMsg = in.text == null ? "" : in.text.trim(); // 🤤
-                    if (!cleanMsg.isEmpty()) {
-                        chatLog.add(handle + ": " + cleanMsg);
+                if(in != null) {
+                    if (in.type.equals(GameMessage.START)) {
+                        startGameNonHost();
+                    }
+                    if (in.type.equals(GameMessage.HERO_SELECT)) {
+                        changeHeroe(handle, in.text);
                         broadcastLobbyState();
+                    } else if (in.type.equals(GameMessage.CHAT)) {
+                        String cleanMsg = in.text == null ? "" : in.text.trim(); // 🤤
+                        if (!cleanMsg.isEmpty()) {
+                            chatLog.add(handle + ": " + cleanMsg);
+                            broadcastLobbyState();
+                        }
                     }
                 }
 

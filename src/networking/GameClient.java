@@ -42,6 +42,15 @@ public class GameClient {
         }
     }
 
+    public GameMessage readUpdateToGameMessage() throws IOException, ClassNotFoundException {
+        while (true){
+            GameMessage msg = (GameMessage) in.readObject();
+            if( msg != null){
+                return msg;
+            }
+        }
+    }
+
     public void selectHero(String hero) throws IOException {
         out.writeObject(new GameMessage(GameMessage.HERO_SELECT, hero));
         System.out.println("hero selected: " + hero);

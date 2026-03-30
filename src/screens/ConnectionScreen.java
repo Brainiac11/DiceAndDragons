@@ -12,10 +12,8 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.Timer;
-import src.networking.GameClient;
-import src.networking.GameServer;
-import src.networking.LobbyState;
-import src.networking.PlayerInfo;
+
+import src.networking.*;
 import src.players.Heroes;
 
 public class ConnectionScreen extends JFrame {
@@ -166,7 +164,7 @@ public class ConnectionScreen extends JFrame {
             // TODO: BANADAID AHH Solutions for updatiign state need to get this done right
             t = new Timer(500, event -> {
                 if (s != null) {
-                    updateThePaintOnLobby(s.getCurrentLobbyState());
+                    updateThePaintOnLobby(new GameMessage(GameMessage.LOBBY_UPDATE, s.getCurrentLobbyState()));
                 }
             });
             t.start();
@@ -210,7 +208,7 @@ public class ConnectionScreen extends JFrame {
                 openLobby();
                 top.setText("Player: " + me + " Host: " + ipx + ":" + p);
                 sub.setText("Connected to lobby.");
-                updateThePaintOnLobby(first);
+                updateThePaintOnLobby(new GameMessage(GameMessage.LOBBY_UPDATE, first));
                 listenClient();
             } catch (Exception e) {
                 stat.setText("Failed to COnnect");
@@ -284,12 +282,18 @@ public class ConnectionScreen extends JFrame {
     }
 
     // this is so cancer
-    private void updateThePaintOnLobby(LobbyState st) {
-        if (st == null) {
+    private void updateThePaintOnLobby(GameMessage gt) {
+        if (gt == null) {
             return;
         }
+        if(gt.type.equals(GameMessage.START)){
+            setContentPane(new GameScreen());
+            revalidate();
+            repaint();
+
+        }
         String x = "";
-        for (PlayerInfo p : st.players) {
+        for (PlayerInfo p : gt.lobbyState.players) {
             String hh = (p.hero == null || p.hero.isEmpty()) ? "No Hero" : p.hero;
             String rr;
 
@@ -314,13 +318,13 @@ public class ConnectionScreen extends JFrame {
         ppl.setText(x);
 
         String y = "";
-        for (String line : st.chat) {
+        for (String line : gt.lobbyState.chat) {
             y = y + line + "\n";
         }
         chat.setText(y);
 
         String myHero = null;
-        for (PlayerInfo p : st.players) {
+        for (PlayerInfo p : gt.lobbyState.players) {
             // System.out.println(p.handle);
             if (p.handle != null && me != null && p.handle.equalsIgnoreCase(me)) {
                 myHero = p.hero;
@@ -342,15 +346,18 @@ public class ConnectionScreen extends JFrame {
         }
         noHeroEvent = false;
         start.setVisible(host);
-        start.setEnabled(host && st.allReady);
+        start.setEnabled(host && gt.lobbyState.allReady);
     }
 
     private void listenClient() {
         Thread th = new Thread(() -> {
             try {
                 while (true) {
-                    LobbyState st = c.readUpdateToLobby();
-                    updateThePaintOnLobby(st);
+//                    LobbyState st = c.readUpdateToLobby();
+//                    updateThePaintOnLobby(st);
+                    GameMessage gt = c.readUpdateToGameMessage();
+
+                    updateThePaintOnLobby(gt);
                 }
             } catch (Exception e) {
                 stopAll();
