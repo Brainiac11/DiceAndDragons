@@ -2,6 +2,7 @@ package src.screens;
 
 import java.awt.FlowLayout;
 import java.io.IOException;
+import java.util.ArrayList;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
@@ -12,8 +13,11 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.Timer;
-
-import src.networking.*;
+import src.networking.GameClient;
+import src.networking.GameMessage;
+import src.networking.GameServer;
+import src.networking.LobbyState;
+import src.networking.PlayerInfo;
 import src.players.Heroes;
 
 public class ConnectionScreen extends JFrame {
@@ -44,6 +48,8 @@ public class ConnectionScreen extends JFrame {
     private JTextField msg;
 
     private JButton start;
+    private MarketplaceScreen marketplace;
+    private boolean inMarketplace;
 
     public ConnectionScreen() {
         super("Dice and Dragons");
@@ -89,16 +95,19 @@ public class ConnectionScreen extends JFrame {
         ppl.setEditable(false);
 
         // placeholders for now when i acc get everything oorkingn
-        hero = new JComboBox<>(new String[] { HERO_PLACEHOLDER, Heroes.WARRIOR, Heroes.WIZARD, Heroes.CLERIC, Heroes.RANGER, Heroes.ROGUE });
+        hero = new JComboBox<>(new String[] { HERO_PLACEHOLDER, Heroes.WARRIOR, Heroes.WIZARD, Heroes.CLERIC,
+                Heroes.RANGER, Heroes.ROGUE });
 
         chat = new JTextArea(16, 37);
         chat.setEditable(false);
         chat.setLineWrap(true);
+        chat.setWrapStyleWord(true);
         msg = new JTextField(25);
         JButton send = new JButton("Send");
 
         // only host can start the game, but everyone can see the button, need to patch
         start = new JButton("Start Game");
+        start.setVisible(false);
         JButton leave = new JButton("Leave Lobby");
 
         p2.add(top);
@@ -122,20 +131,28 @@ public class ConnectionScreen extends JFrame {
     }
 
     private void openMain() {
-        try {
-
-            this.remove(p2);
-            this.add(p1);
-            setContentPane(p1);
-            revalidate();
-            repaint();
-        } catch(Exception e){
-            e.printStackTrace();
-        }
+        inMarketplace = false;
+        marketplace = null;
+        setContentPane(p1);
+        revalidate();
+        repaint();
     }
 
     private void openLobby() {
+        inMarketplace = false;
         setContentPane(p2);
+        revalidate();
+        repaint();
+    }
+
+    private void openMarketplace(LobbyState state) {
+        if (marketplace == null) {
+            marketplace = new MarketplaceScreen(this::sendMarketplaceMessage, this::buyMarketplaceItem, host,
+                    this::selectBoss);
+        }
+        marketplace.updateFromLobbyState(state);
+        inMarketplace = true;
+        setContentPane(marketplace);
         revalidate();
         repaint();
     }
@@ -160,6 +177,7 @@ public class ConnectionScreen extends JFrame {
             openLobby();
             top.setText("Host: " + me + " Port: " + s.getPort());
             sub.setText("Waiitng for platers......");
+            start.setVisible(true);
 
             // TODO: BANADAID AHH Solutions for updatiign state need to get this done right
             t = new Timer(500, event -> {
@@ -236,7 +254,6 @@ public class ConnectionScreen extends JFrame {
                 c.selectHero(h == null ? "" : h);
             }
         } catch (IOException e) {
-            // System.out.println(host);
             sub.setText("Error");
         }
     }
@@ -244,20 +261,76 @@ public class ConnectionScreen extends JFrame {
     private void sendMsg() {
         String m = msg.getText().trim();
         System.out.println("Mesaage: " + m);
-        if (m.isEmpty()) {
+        if (sendChatMessage(m)) {
+            msg.setText("");
+        }
+    }
+
+    private void sendMarketplaceMessage(String message) {
+        sendChatMessage(message);
+    }
+
+    private void buyMarketplaceItem(String itemName) {
+        String cleanItem = itemName == null ? "" : itemName.trim();
+        if (cleanItem.isEmpty()) {
             return;
         }
+
+        if (host && s != null) {
+            s.buyItem(cleanItem, me);
+            return;
+        }
+
+        if (!host && c != null) {
+            try {
+                c.buyItem(cleanItem);
+            } catch (IOException e) {
+                sub.setText("Error buying item");
+            }
+        }
+    }
+
+    private void selectBoss(String bossName) {
+        String cleanBoss = bossName == null ? "" : bossName.trim();
+        if (cleanBoss.isEmpty()) {
+            return;
+        }
+
+        if (host && s != null) {
+            s.selectBoss(cleanBoss);
+            return;
+        }
+
+        if (!host && c != null) {
+            try {
+                c.selectBoss(cleanBoss);
+            } catch (IOException e) {
+                sub.setText("Error selecting boss");
+            }
+        }
+    }
+
+    private boolean sendChatMessage(String rawText) {
+        String m = rawText == null ? "" : rawText.trim();
+        if (m.isEmpty()) {
+            return false;
+        }
+
         try {
             if (host && s != null) {
                 s.sendHostChatMessage(m);
-
-            } else if (!host && c != null) {
-                c.sendChatMessage(m);
+                return true;
             }
-            msg.setText("");
+            if (!host && c != null) {
+                c.sendChatMessage(m);
+                return true;
+            }
         } catch (IOException e) {
-            sub.setText("Error when trying to send messaage");
+            if (!inMarketplace) {
+                sub.setText("Error when trying to send messaage");
+            }
         }
+        return false;
     }
 
     private void pressStart() {
@@ -272,6 +345,7 @@ public class ConnectionScreen extends JFrame {
         }
         s.startGame();
         sub.setText("Game started@");
+        openMarketplace(s.getCurrentLobbyState());
     }
 
     private void leaveRoom() {
@@ -286,14 +360,33 @@ public class ConnectionScreen extends JFrame {
         if (gt == null) {
             return;
         }
-        if(gt.type.equals(GameMessage.START)){
-            setContentPane(new GameScreen());
-            revalidate();
-            repaint();
 
+        LobbyState state = gt.lobbyState;
+
+        if (GameMessage.START.equals(gt.type)) {
+            if (state == null && host && s != null) {
+                state = s.getCurrentLobbyState();
+            }
+            openMarketplace(state);
+            return;
         }
-        String x = "";
-        for (PlayerInfo p : gt.lobbyState.players) {
+
+        if (state == null) {
+            return;
+        }
+
+        if (inMarketplace) {
+            if (marketplace != null) {
+                marketplace.updateFromLobbyState(state);
+            }
+            return;
+        }
+
+        ArrayList<PlayerInfo> players = state.players == null ? new ArrayList<>() : state.players;
+        ArrayList<String> chatLines = state.chat == null ? new ArrayList<>() : state.chat;
+
+        StringBuilder playerText = new StringBuilder();
+        for (PlayerInfo p : players) {
             String hh = (p.hero == null || p.hero.isEmpty()) ? "No Hero" : p.hero;
             String rr;
 
@@ -313,25 +406,25 @@ public class ConnectionScreen extends JFrame {
                 rr = "Ready";
             }
 
-            x = x + p.handle + " --- " + hh + " --- " + rr + "\n";
+            playerText.append(p.handle).append(" --- ").append(hh).append(" --- ").append(rr).append("\n");
         }
-        ppl.setText(x);
+        ppl.setText(playerText.toString());
 
-        String y = "";
-        for (String line : gt.lobbyState.chat) {
-            y = y + line + "\n";
+        StringBuilder chatText = new StringBuilder();
+        for (String line : chatLines) {
+            chatText.append(line).append("\n");
         }
-        chat.setText(y);
+        chat.setText(chatText.toString());
 
         String myHero = null;
-        for (PlayerInfo p : gt.lobbyState.players) {
+        for (PlayerInfo p : players) {
             // System.out.println(p.handle);
             if (p.handle != null && me != null && p.handle.equalsIgnoreCase(me)) {
                 myHero = p.hero;
                 break;
             }
-
         }
+
         if (myHero != null && !myHero.isEmpty()) {
             myPick = myHero;
         }
@@ -346,15 +439,15 @@ public class ConnectionScreen extends JFrame {
         }
         noHeroEvent = false;
         start.setVisible(host);
-        start.setEnabled(host && gt.lobbyState.allReady);
+        start.setEnabled(host && state.allReady);
     }
 
     private void listenClient() {
         Thread th = new Thread(() -> {
             try {
                 while (true) {
-//                    LobbyState st = c.readUpdateToLobby();
-//                    updateThePaintOnLobby(st);
+                    // LobbyState st = c.readUpdateToLobby();
+                    // updateThePaintOnLobby(st);
                     GameMessage gt = c.readUpdateToGameMessage();
 
                     updateThePaintOnLobby(gt);

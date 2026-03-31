@@ -6,16 +6,22 @@ import java.net.Socket;
 import java.util.ArrayList;
 
 public class GameServer {
-    private ServerSocket serverSocket;
-    private ArrayList<GameSubscriber> clients = new ArrayList<>();
-    private ArrayList<PlayerInfo> players = new ArrayList<>();
-    private ArrayList<String> chatLog = new ArrayList<>();
-    private String hostHandle;
+    private static final int STARTING_GOLD_PER_PLAYER = 100;
+
+    private final ServerSocket serverSocket;
+    private final ArrayList<GameSubscriber> clients = new ArrayList<>();
+    private final ArrayList<PlayerInfo> players = new ArrayList<>();
+    private final ArrayList<String> chatLog = new ArrayList<>();
+    private final String hostHandle;
+    private int teamGold;
+    private boolean gameStarted;
+    private String selectedDragon;
 
     public GameServer(String hostHandle) throws IOException {
         this.hostHandle = hostHandle.trim();
         serverSocket = new ServerSocket(0);
         players.add(new PlayerInfo(this.hostHandle));
+        recalculateTeamGold();
     }
 
     public int getPort() {
@@ -23,13 +29,7 @@ public class GameServer {
     }
 
     public synchronized LobbyState getCurrentLobbyState() {
-        boolean allReady = !players.isEmpty();
-        for (PlayerInfo p : players) {
-            if (!p.ready) {
-                allReady = false;
-                break;
-            }
-        }
+        boolean allReady = areAllPlayersReady();
 
         ArrayList<PlayerInfo> copyPlayers = new ArrayList<>();
         for (PlayerInfo p : players) {
@@ -39,13 +39,33 @@ public class GameServer {
             copyPlayers.add(cp);
         }
 
-        return new LobbyState(copyPlayers, new ArrayList<>(chatLog), allReady);
+        return new LobbyState(copyPlayers, new ArrayList<>(chatLog), allReady, teamGold, selectedDragon);
     }
 
-//    public synchronized  GameMessage getCurrentGameMessage(){
-//
-//        GameMessage gm = new GameMessage();
-//    }
+    // public synchronized GameMessage getCurrentGameMessage(){
+    //
+    // GameMessage gm = new GameMessage();
+    // }
+
+    private synchronized boolean areAllPlayersReady() {
+        if (players.isEmpty()) {
+            return false;
+        }
+        for (PlayerInfo p : players) {
+            if (!p.ready) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private synchronized void recalculateTeamGold() {
+        if (players.isEmpty()) {
+            teamGold = STARTING_GOLD_PER_PLAYER;
+            return;
+        }
+        teamGold = players.size() * STARTING_GOLD_PER_PLAYER;
+    }
 
     public synchronized void setHostHero(String hero) {
         for (PlayerInfo p : players) {
@@ -68,13 +88,47 @@ public class GameServer {
         broadcastLobbyState();
     }
 
-    public synchronized void startGame() {
-        chatLog.add("*****Host Started the Game*****");
-        sendGameMessage(new GameMessage(GameMessage.START, ""));
+    public synchronized void buyItem(String itemName, String handle) {
+        String cleanItem = itemName == null ? "" : itemName.trim();
+        if (!isBuyableItem(cleanItem)) {
+            return;
+        }
+        if (teamGold <= 0) {
+            chatLog.add("No team gold left for " + cleanItem + ".");
+            broadcastLobbyState();
+            return;
+        }
+
+        teamGold = teamGold - 1;
+        String buyer = handle == null ? "Unknown" : handle.trim();
+        if (buyer.isEmpty()) {
+            buyer = "Unknown";
+        }
+        chatLog.add(buyer + " bought " + cleanItem + " for 1 gold.");
         broadcastLobbyState();
     }
 
-    public synchronized void startGameNonHost(){
+    public synchronized void selectBoss(String bossName) {
+        String cleanBoss = bossName == null ? "" : bossName.trim();
+        if (isBuyableBoss(cleanBoss)) {
+            selectedDragon = cleanBoss;
+            chatLog.add("Dragon selected: " + cleanBoss);
+            broadcastLobbyState();
+        }
+    }
+
+    public synchronized void startGame() {
+        if (gameStarted || !areAllPlayersReady()) {
+            return;
+        }
+        gameStarted = true;
+        chatLog.add("*****Host Started the Game*****");
+        LobbyState startedState = getCurrentLobbyState();
+        sendGameMessage(new GameMessage(GameMessage.START, "Game started", startedState));
+        broadcastLobbyState();
+    }
+
+    public synchronized void startGameNonHost() {
         System.out.println("STARITNG THE AME");
     }
 
@@ -97,57 +151,80 @@ public class GameServer {
         acceptThread.start();
     }
 
-    private void handleTheNewClient(Socket wetSock) {
+    private void handleTheNewClient(Socket socket) {
         GameSubscriber sub = null;
         try {
-            sub = new GameSubscriber(wetSock);
+            sub = new GameSubscriber(socket);
 
-            GameMessage msg = (GameMessage) sub.read();
-            if (!msg.type.equals(GameMessage.JOIN_REQUEST)) {
+            Object firstObject = sub.read();
+            if (!(firstObject instanceof GameMessage)) {
                 sub.send(new GameMessage(GameMessage.JOIN_REJECTED, "wanted a join request, wasn't sent "));
-                wetSock.close();
+                socket.close();
+                return;
+            }
+            GameMessage msg = (GameMessage) firstObject;
+            if (!GameMessage.JOIN_REQUEST.equals(msg.type)) {
+                sub.send(new GameMessage(GameMessage.JOIN_REJECTED, "wanted a join request, wasn't sent "));
+                socket.close();
                 return;
             }
 
-            String handle = msg.text.trim();
+            String handle = msg.text == null ? "" : msg.text.trim();
             if (handle.isEmpty()) {
                 sub.send(new GameMessage(GameMessage.JOIN_REJECTED, "empty hangle warning"));
-                wetSock.close();
+                socket.close();
                 return;
             }
 
-            if (isTheHandleAlreadyTaken(handle)) {
-                sub.send(new GameMessage(GameMessage.JOIN_REJECTED, "Handle \"" + handle + "\" is already taken."));
-                wetSock.close();
-                return;
-            }
+            synchronized (this) {
+                if (gameStarted) {
+                    sub.send(new GameMessage(GameMessage.JOIN_REJECTED, "Game already started."));
+                    socket.close();
+                    return;
+                }
 
-            sub.handle = handle;
-            clients.add(sub);
-            players.add(new PlayerInfo(handle));
+                if (isTheHandleAlreadyTaken(handle)) {
+                    sub.send(new GameMessage(GameMessage.JOIN_REJECTED, "Handle \"" + handle + "\" is already taken."));
+                    socket.close();
+                    return;
+                }
+
+                sub.handle = handle;
+                clients.add(sub);
+                players.add(new PlayerInfo(handle));
+                recalculateTeamGold();
+            }
 
             sub.send(new GameMessage(GameMessage.JOIN_ACCEPTED, "Connected to lobby.", getCurrentLobbyState()));
             broadcastLobbyState();
 
             // holy bandaid ts code sucks
-            while (!wetSock.isClosed()) {
-                GameMessage in = (GameMessage) sub.read();
-                if(in != null) {
-                    if (in.type.equals(GameMessage.START)) {
-                        startGameNonHost();
-                    }
-                    if (in.type.equals(GameMessage.HERO_SELECT)) {
-                        changeHeroe(handle, in.text);
-                        broadcastLobbyState();
-                    } else if (in.type.equals(GameMessage.CHAT)) {
-                        String cleanMsg = in.text == null ? "" : in.text.trim(); // 🤤
-                        if (!cleanMsg.isEmpty()) {
-                            chatLog.add(handle + ": " + cleanMsg);
-                            broadcastLobbyState();
-                        }
-                    }
+            while (!socket.isClosed()) {
+                Object incoming = sub.read();
+                if (!(incoming instanceof GameMessage)) {
+                    break;
                 }
 
+                GameMessage in = (GameMessage) incoming;
+                if (in.type.equals(GameMessage.START)) {
+                    startGameNonHost();
+                }
+                if (GameMessage.HERO_SELECT.equals(in.type)) {
+                    changeHeroe(handle, in.text);
+                    broadcastLobbyState();
+                } else if (GameMessage.BUY_ITEM.equals(in.type)) {
+                    buyItem(in.text, handle);
+                } else if (GameMessage.SELECT_DRAGON.equals(in.type)) {
+                    selectBoss(in.text);
+                } else if (GameMessage.CHAT.equals(in.type)) {
+                    String cleanMsg = in.text == null ? "" : in.text.trim(); // 🤤
+                    if (!cleanMsg.isEmpty()) {
+                        synchronized (this) {
+                            chatLog.add(handle + ": " + cleanMsg);
+                        }
+                        broadcastLobbyState();
+                    }
+                }
             }
         } catch (Exception e) {
             // smth happened with client but miht jsut remeove this accc such bad code
@@ -157,7 +234,7 @@ public class GameServer {
                 removeClient(sub);
             }
             try {
-                wetSock.close();
+                socket.close();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -202,13 +279,26 @@ public class GameServer {
         return true;
     }
 
+    private boolean isBuyableItem(String itemName) {
+        return "ITEM_1".equals(itemName) || "ITEM_2".equals(itemName);
+    }
+
+    private boolean isBuyableBoss(String bossName) {
+        return "DRAGON_1".equals(bossName) || "DRAGON_2".equals(bossName);
+    }
+
     private synchronized void removeClient(GameSubscriber sub) {
         clients.remove(sub);
+        boolean removedPlayer = false;
         for (int i = 0; i < players.size(); i++) {
             if (players.get(i).handle.equals(sub.handle)) {
                 players.remove(i);
+                removedPlayer = true;
                 break;
             }
+        }
+        if (removedPlayer && !gameStarted) {
+            recalculateTeamGold();
         }
         broadcastLobbyState();
     }
@@ -225,7 +315,7 @@ public class GameServer {
         }
     }
 
-    public synchronized void sendGameMessage(GameMessage message){
+    public synchronized void sendGameMessage(GameMessage message) {
         for (GameSubscriber client : clients) {
             try {
                 System.out.println("HHHEE");
@@ -237,7 +327,7 @@ public class GameServer {
     }
 
     public void close() {
-        //sok 🫠
+        // sok 🫠
         try {
             if (serverSocket != null) {
                 serverSocket.close();

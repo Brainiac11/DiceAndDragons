@@ -10,6 +10,8 @@ public class GameMessage implements Serializable {
     public static final String HERO_SELECT = "HERO_SELECT";
     public static final String CHAT = "CHAT";
     public static final String START = "START";
+    public static final String BUY_ITEM = "BUY_ITEM";
+    public static final String SELECT_DRAGON = "SELECT_DRAGON";
 
     public String type;
     public String text;

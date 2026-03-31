@@ -20,7 +20,6 @@ public class GameClient {
 
         in = new ObjectInputStream(socket.getInputStream());
 
-
         out.writeObject(new GameMessage(GameMessage.JOIN_REQUEST, handle));
         out.flush();
 
@@ -43,9 +42,9 @@ public class GameClient {
     }
 
     public GameMessage readUpdateToGameMessage() throws IOException, ClassNotFoundException {
-        while (true){
+        while (true) {
             GameMessage msg = (GameMessage) in.readObject();
-            if( msg != null){
+            if (msg != null) {
                 return msg;
             }
         }
@@ -60,6 +59,18 @@ public class GameClient {
     public void sendChatMessage(String message) throws IOException {
         out.writeObject(new GameMessage(GameMessage.CHAT, message));
         System.out.println(message);
+        out.flush();
+    }
+
+    public void buyItem(String itemName) throws IOException {
+        out.writeObject(new GameMessage(GameMessage.BUY_ITEM, itemName));
+        System.out.println("buying item: " + itemName);
+        out.flush();
+    }
+
+    public void selectBoss(String bossName) throws IOException {
+        out.writeObject(new GameMessage(GameMessage.SELECT_DRAGON, bossName));
+        System.out.println("selecting dragon: " + bossName);
         out.flush();
     }
 
