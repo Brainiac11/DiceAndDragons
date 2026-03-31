@@ -3,6 +3,7 @@ package src.screens;
 import java.awt.FlowLayout;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.function.Consumer;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
@@ -19,6 +20,8 @@ import src.networking.GameServer;
 import src.networking.LobbyState;
 import src.networking.PlayerInfo;
 import src.players.Heroes;
+
+// MAKE SURE TO CHANGE THE HOST NAME TAKEN ERROR SCREEN TO DISPLAY THAT THE HOST NAME IS TAKEn
 
 public class ConnectionScreen extends JFrame {
     private static final String HERO_PLACEHOLDER = "Select an Hero";
@@ -50,6 +53,10 @@ public class ConnectionScreen extends JFrame {
     private JButton start;
     private MarketplaceScreen marketplace;
     private boolean inMarketplace;
+    private Consumer<String> dragonPicker;
+    private JComboBox<String> dragonSelector;
+    private JLabel dragonLabel;
+    private boolean noDragonEvent;
 
     public ConnectionScreen() {
         super("Dice and Dragons");
@@ -89,7 +96,8 @@ public class ConnectionScreen extends JFrame {
 
         top = new JLabel("Lobby");
         sub = new JLabel("watiing for the ost.....");
-
+        this.dragonPicker = dragonPicker;
+        this.noDragonEvent = false;
         // 67
         ppl = new JTextArea(12, 22);
         ppl.setEditable(false);
@@ -104,6 +112,12 @@ public class ConnectionScreen extends JFrame {
         chat.setWrapStyleWord(true);
         msg = new JTextField(25);
         JButton send = new JButton("Send");
+        dragonSelector = new JComboBox<>(new String[] { "DRAGON_1", "DRAGON_2" });
+
+
+
+        dragonLabel = new JLabel("Selected: None");
+
 
         // only host can start the game, but everyone can see the button, need to patch
         start = new JButton("Start Game");
@@ -122,12 +136,18 @@ public class ConnectionScreen extends JFrame {
         p2.add(send);
         p2.add(start);
         p2.add(leave);
+        p2.add(dragonSelector);
+        dragonSelector.setEnabled(host);
+        p2.add(new JLabel("Dragon:"));
+        p2.add(dragonLabel);
+        dragonPicker = this::selectBoss;
 
         hero.addActionListener(e -> pickHero());
         send.addActionListener(e -> sendMsg());
         msg.addActionListener(e -> sendMsg());
         start.addActionListener(e -> pressStart());
         leave.addActionListener(e -> leaveRoom());
+        dragonSelector.addActionListener(e -> selectDragon());
     }
 
     private void openMain() {
@@ -140,6 +160,8 @@ public class ConnectionScreen extends JFrame {
 
     private void openLobby() {
         inMarketplace = false;
+
+        makeLobby();
         setContentPane(p2);
         revalidate();
         repaint();
@@ -147,14 +169,27 @@ public class ConnectionScreen extends JFrame {
 
     private void openMarketplace(LobbyState state) {
         if (marketplace == null) {
-            marketplace = new MarketplaceScreen(this::sendMarketplaceMessage, this::buyMarketplaceItem, host,
-                    this::selectBoss);
+            marketplace = new MarketplaceScreen(this::sendMarketplaceMessage, this::buyMarketplaceItem, host
+                    );
         }
         marketplace.updateFromLobbyState(state);
         inMarketplace = true;
         setContentPane(marketplace);
         revalidate();
         repaint();
+    }
+    private void selectDragon() {
+        if (noDragonEvent) {
+            return;
+        }
+        String selected = (String) dragonSelector.getSelectedItem();
+        if (selected == null || selected.isEmpty()) {
+            return;
+        }
+        if (dragonPicker != null) {
+            dragonPicker.accept(selected);
+            dragonLabel.setText(selected);
+        }
     }
 
     private void doHost() {
@@ -165,11 +200,12 @@ public class ConnectionScreen extends JFrame {
             return;
         }
         stopAll();
+        host = true;
         try {
             s = new GameServer(n);
             me = n;
             myPick = null;
-            host = true;
+
 
             port.setText(String.valueOf(s.getPort()));
             s.startListening();
@@ -380,6 +416,14 @@ public class ConnectionScreen extends JFrame {
                 marketplace.updateFromLobbyState(state);
             }
             return;
+        }
+        if (state.selectedDragon != null && !state.selectedDragon.isEmpty()) {
+            noDragonEvent = true;
+            dragonSelector.setSelectedItem(state.selectedDragon);
+            noDragonEvent = false;
+            dragonLabel.setText("Selected: " + state.selectedDragon);
+        } else {
+            dragonLabel.setText("Selected: None");
         }
 
         ArrayList<PlayerInfo> players = state.players == null ? new ArrayList<>() : state.players;

@@ -6,7 +6,7 @@ import java.net.Socket;
 import java.util.ArrayList;
 
 public class GameServer {
-    private static final int STARTING_GOLD_PER_PLAYER = 100;
+    private static final int STARTING_GOLD_PER_PLAYER = 10;
 
     private final ServerSocket serverSocket;
     private final ArrayList<GameSubscriber> clients = new ArrayList<>();
@@ -99,7 +99,7 @@ public class GameServer {
             return;
         }
 
-        teamGold = teamGold - 1;
+        teamGold = teamGold - 2;
         String buyer = handle == null ? "Unknown" : handle.trim();
         if (buyer.isEmpty()) {
             buyer = "Unknown";
