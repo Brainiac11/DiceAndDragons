@@ -3,13 +3,9 @@ package src.screens;
 import java.awt.FlowLayout;
 import java.util.ArrayList;
 import java.util.function.Consumer;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
+import javax.swing.*;
+import javax.swing.table.TableColumnModel;
+
 import src.networking.LobbyState;
 
 public class MarketplaceScreen extends JPanel {
@@ -21,6 +17,11 @@ public class MarketplaceScreen extends JPanel {
     private final boolean isHost;
     private final JButton item1Button;
     private final JButton item2Button;
+
+
+    private JScrollPane market;
+    private JLabel smallHealingPotion;
+    private JTable marketTable;
 
 
 
@@ -63,6 +64,12 @@ public class MarketplaceScreen extends JPanel {
 
         add(messageField);
         add(sendButton);
+
+        market = new JScrollPane();
+        market.add(new JLabel("HELO"));
+        add(market);
+        marketTable = new JTable(new TableColumnModel())
+        smallHealingPotion = new JLabel("Small Healing Potion - ")
     }
 
     private void buyItem(String itemName) {
