@@ -19,6 +19,7 @@ import src.networking.GameMessage;
 import src.networking.GameServer;
 import src.networking.LobbyState;
 import src.networking.PlayerInfo;
+import src.players.DragonCatalog;
 import src.players.Heroes;
 
 // MAKE SURE TO CHANGE THE HOST NAME TAKEN ERROR SCREEN TO DISPLAY THAT THE HOST NAME IS TAKEn
@@ -96,7 +97,6 @@ public class ConnectionScreen extends JFrame {
 
         top = new JLabel("Lobby");
         sub = new JLabel("watiing for the ost.....");
-        this.dragonPicker = dragonPicker;
         this.noDragonEvent = false;
         // 67
         ppl = new JTextArea(12, 22);
@@ -112,12 +112,10 @@ public class ConnectionScreen extends JFrame {
         chat.setWrapStyleWord(true);
         msg = new JTextField(25);
         JButton send = new JButton("Send");
-        dragonSelector = new JComboBox<>(new String[] { "DRAGON_1", "DRAGON_2" });
-
-
+        dragonSelector = new JComboBox<>(DragonCatalog.getSelectableDisplayNames());
+        dragonSelector.setSelectedIndex(-1);
 
         dragonLabel = new JLabel("Selected: None");
-
 
         // only host can start the game, but everyone can see the button, need to patch
         start = new JButton("Start Game");
@@ -169,8 +167,8 @@ public class ConnectionScreen extends JFrame {
 
     private void openMarketplace(LobbyState state) {
         if (marketplace == null) {
-            marketplace = new MarketplaceScreen(this::sendMarketplaceMessage, this::buyMarketplaceItem, host
-                    );
+            marketplace = new MarketplaceScreen(this::sendMarketplaceMessage, this::buyMarketplaceItem,
+                    this::sellMarketplaceItem, this::startGameplayFromMarketplace, host, me);
         }
         marketplace.updateFromLobbyState(state);
         inMarketplace = true;
@@ -178,17 +176,35 @@ public class ConnectionScreen extends JFrame {
         revalidate();
         repaint();
     }
+
+    private void startGameplayFromMarketplace() {
+        if (!host || s == null) {
+            return;
+        }
+
+        s.openGameScreenForAllPlayers();
+        openGameplayScreen();
+    }
+
+    private void openGameplayScreen() {
+        inMarketplace = false;
+        setContentPane(new GameScreen());
+        revalidate();
+        repaint();
+    }
+
     private void selectDragon() {
         if (noDragonEvent) {
             return;
         }
         String selected = (String) dragonSelector.getSelectedItem();
-        if (selected == null || selected.isEmpty()) {
+        DragonCatalog.DragonProfile selectedDragon = DragonCatalog.findBySelection(selected);
+        if (selectedDragon == null) {
             return;
         }
         if (dragonPicker != null) {
-            dragonPicker.accept(selected);
-            dragonLabel.setText(selected);
+            dragonPicker.accept(selectedDragon.getId());
+            dragonLabel.setText("Selected: " + selectedDragon.getDisplayName());
         }
     }
 
@@ -205,7 +221,6 @@ public class ConnectionScreen extends JFrame {
             s = new GameServer(n);
             me = n;
             myPick = null;
-
 
             port.setText(String.valueOf(s.getPort()));
             s.startListening();
@@ -265,8 +280,10 @@ public class ConnectionScreen extends JFrame {
                 updateThePaintOnLobby(new GameMessage(GameMessage.LOBBY_UPDATE, first));
                 listenClient();
             } catch (Exception e) {
-                stat.setText("Failed to COnnect");
-                JOptionPane.showMessageDialog(ConnectionScreen.this, "Failed to Conect", "Join Failed",
+                String message = e.getMessage() == null || e.getMessage().isBlank() ? "Failed to connect"
+                        : e.getMessage();
+                stat.setText(message);
+                JOptionPane.showMessageDialog(ConnectionScreen.this, message, "Join Failed",
                         JOptionPane.WARNING_MESSAGE);
             }
         });
@@ -326,6 +343,26 @@ public class ConnectionScreen extends JFrame {
         }
     }
 
+    private void sellMarketplaceItem(String itemName) {
+        String cleanItem = itemName == null ? "" : itemName.trim();
+        if (cleanItem.isEmpty()) {
+            return;
+        }
+
+        if (host && s != null) {
+            s.sellItem(cleanItem, me);
+            return;
+        }
+
+        if (!host && c != null) {
+            try {
+                c.sellItem(cleanItem);
+            } catch (IOException e) {
+                sub.setText("Error selling item");
+            }
+        }
+    }
+
     private void selectBoss(String bossName) {
         String cleanBoss = bossName == null ? "" : bossName.trim();
         if (cleanBoss.isEmpty()) {
@@ -379,6 +416,10 @@ public class ConnectionScreen extends JFrame {
                     "not all players sleected hero, make sure they do to start the game otherwise you can't start the game ");
             return;
         }
+        if (st.selectedDragon == null || st.selectedDragon.trim().isEmpty()) {
+            sub.setText("Select a dragon before starting the game.");
+            return;
+        }
         s.startGame();
         sub.setText("Game started@");
         openMarketplace(s.getCurrentLobbyState());
@@ -407,6 +448,11 @@ public class ConnectionScreen extends JFrame {
             return;
         }
 
+        if (GameMessage.OPEN_GAME_SCREEN.equals(gt.type)) {
+            openGameplayScreen();
+            return;
+        }
+
         if (state == null) {
             return;
         }
@@ -417,12 +463,16 @@ public class ConnectionScreen extends JFrame {
             }
             return;
         }
-        if (state.selectedDragon != null && !state.selectedDragon.isEmpty()) {
+        String selectedDragonDisplayName = DragonCatalog.toDisplayName(state.selectedDragon);
+        if (selectedDragonDisplayName != null && !selectedDragonDisplayName.isEmpty()) {
             noDragonEvent = true;
-            dragonSelector.setSelectedItem(state.selectedDragon);
+            dragonSelector.setSelectedItem(selectedDragonDisplayName);
             noDragonEvent = false;
-            dragonLabel.setText("Selected: " + state.selectedDragon);
+            dragonLabel.setText("Selected: " + selectedDragonDisplayName);
         } else {
+            noDragonEvent = true;
+            dragonSelector.setSelectedIndex(-1);
+            noDragonEvent = false;
             dragonLabel.setText("Selected: None");
         }
 

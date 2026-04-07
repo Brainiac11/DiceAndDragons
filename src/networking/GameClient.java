@@ -27,7 +27,7 @@ public class GameClient {
         // System.out.println("resonones: " + response.type);
         if (response.type.equals(GameMessage.JOIN_REJECTED)) {
             socket.close();
-            throw new Exception("Connecton failes");
+            throw new Exception(response.text == null || response.text.isBlank() ? "Connection failed" : response.text);
         }
         return response.lobbyState;
     }
@@ -65,6 +65,12 @@ public class GameClient {
     public void buyItem(String itemName) throws IOException {
         out.writeObject(new GameMessage(GameMessage.BUY_ITEM, itemName));
         System.out.println("buying item: " + itemName);
+        out.flush();
+    }
+
+    public void sellItem(String itemName) throws IOException {
+        out.writeObject(new GameMessage(GameMessage.SELL_ITEM, itemName));
+        System.out.println("selling item: " + itemName);
         out.flush();
     }
 

@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import src.item.VillageMarketplaceCatalog;
+import src.players.DragonCatalog;
 
 public class GameServer {
     private static final int STARTING_GOLD_PER_PLAYER = 10;
@@ -36,10 +38,15 @@ public class GameServer {
             PlayerInfo cp = new PlayerInfo(p.handle);
             cp.hero = p.hero;
             cp.ready = p.ready;
+            cp.purchasedItems = p.purchasedItems == null ? new ArrayList<>() : new ArrayList<>(p.purchasedItems);
             copyPlayers.add(cp);
         }
 
         return new LobbyState(copyPlayers, new ArrayList<>(chatLog), allReady, teamGold, selectedDragon);
+    }
+
+    public synchronized DragonCatalog.DragonProfile getSelectedDragonProfile() {
+        return DragonCatalog.findById(selectedDragon);
     }
 
     // public synchronized GameMessage getCurrentGameMessage(){
@@ -90,31 +97,68 @@ public class GameServer {
 
     public synchronized void buyItem(String itemName, String handle) {
         String cleanItem = itemName == null ? "" : itemName.trim();
-        if (!isBuyableItem(cleanItem)) {
+        VillageMarketplaceCatalog.MarketplaceItem marketItem = VillageMarketplaceCatalog.findItem(selectedDragon,
+                cleanItem);
+        if (marketItem == null) {
             return;
         }
-        if (teamGold <= 0) {
+
+        int itemCost = marketItem.getCost();
+        if (teamGold < itemCost) {
             chatLog.add("No team gold left for " + cleanItem + ".");
             broadcastLobbyState();
             return;
         }
 
-        teamGold = teamGold - 2;
+        teamGold = teamGold - itemCost;
         String buyer = handle == null ? "Unknown" : handle.trim();
         if (buyer.isEmpty()) {
             buyer = "Unknown";
         }
-        chatLog.add(buyer + " bought " + cleanItem + " for 1 gold.");
+
+        PlayerInfo buyerInfo = findPlayerByHandle(buyer);
+        if (buyerInfo != null) {
+            buyerInfo.purchasedItems.add(cleanItem);
+            buyer = buyerInfo.handle;
+        }
+
+        chatLog.add(buyer + " bought " + cleanItem + " for " + itemCost + " gold.");
+        broadcastLobbyState();
+    }
+
+    public synchronized void sellItem(String itemName, String handle) {
+        String cleanItem = itemName == null ? "" : itemName.trim();
+        if (cleanItem.isEmpty()) {
+            return;
+        }
+
+        VillageMarketplaceCatalog.MarketplaceItem marketItem = VillageMarketplaceCatalog.findItem(selectedDragon,
+                cleanItem);
+        if (marketItem == null) {
+            return;
+        }
+
+        PlayerInfo sellerInfo = findPlayerByHandle(handle);
+        if (!removeFirstPurchasedItem(sellerInfo, cleanItem)) {
+            return;
+        }
+
+        int refund = marketItem.getCost();
+        teamGold = teamGold + refund;
+        chatLog.add(sellerInfo.handle + " sold " + cleanItem + " for " + refund + " gold.");
         broadcastLobbyState();
     }
 
     public synchronized void selectBoss(String bossName) {
         String cleanBoss = bossName == null ? "" : bossName.trim();
-        if (isBuyableBoss(cleanBoss)) {
-            selectedDragon = cleanBoss;
-            chatLog.add("Dragon selected: " + cleanBoss);
-            broadcastLobbyState();
+        DragonCatalog.DragonProfile selected = DragonCatalog.findBySelection(cleanBoss);
+        if (selected == null) {
+            return;
         }
+
+        selectedDragon = selected.getId();
+        chatLog.add("Dragon selected: " + selected.getDisplayName());
+        broadcastLobbyState();
     }
 
     public synchronized void startGame() {
@@ -126,6 +170,11 @@ public class GameServer {
         LobbyState startedState = getCurrentLobbyState();
         sendGameMessage(new GameMessage(GameMessage.START, "Game started", startedState));
         broadcastLobbyState();
+    }
+
+    public synchronized void openGameScreenForAllPlayers() {
+        LobbyState state = getCurrentLobbyState();
+        sendGameMessage(new GameMessage(GameMessage.OPEN_GAME_SCREEN, "", state));
     }
 
     public synchronized void startGameNonHost() {
@@ -184,7 +233,7 @@ public class GameServer {
                 }
 
                 if (isTheHandleAlreadyTaken(handle)) {
-                    sub.send(new GameMessage(GameMessage.JOIN_REJECTED, "Handle \"" + handle + "\" is already taken."));
+                    sub.send(new GameMessage(GameMessage.JOIN_REJECTED, "Name \"" + handle + "\" is already taken."));
                     socket.close();
                     return;
                 }
@@ -214,6 +263,8 @@ public class GameServer {
                     broadcastLobbyState();
                 } else if (GameMessage.BUY_ITEM.equals(in.type)) {
                     buyItem(in.text, handle);
+                } else if (GameMessage.SELL_ITEM.equals(in.type)) {
+                    sellItem(in.text, handle);
                 } else if (GameMessage.SELECT_DRAGON.equals(in.type)) {
                     selectBoss(in.text);
                 } else if (GameMessage.CHAT.equals(in.type)) {
@@ -264,6 +315,40 @@ public class GameServer {
         }
     }
 
+    private PlayerInfo findPlayerByHandle(String handle) {
+        if (handle == null) {
+            return null;
+        }
+        String cleanHandle = handle.trim();
+        if (cleanHandle.isEmpty()) {
+            return null;
+        }
+
+        for (PlayerInfo p : players) {
+            if (p.handle != null && p.handle.equalsIgnoreCase(cleanHandle)) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    private boolean removeFirstPurchasedItem(PlayerInfo player, String itemName) {
+        if (player == null || player.purchasedItems == null || itemName == null) {
+            return false;
+        }
+
+        String cleanName = itemName.trim();
+        for (int i = 0; i < player.purchasedItems.size(); i++) {
+            String ownedItem = player.purchasedItems.get(i);
+            if (ownedItem != null && ownedItem.trim().equals(cleanName)) {
+                player.purchasedItems.remove(i);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private boolean isRealHero(String hero) {
         if (hero == null) {
             return false;
@@ -277,14 +362,6 @@ public class GameServer {
             return false;
         }
         return true;
-    }
-
-    private boolean isBuyableItem(String itemName) {
-        return "ITEM_1".equals(itemName) || "ITEM_2".equals(itemName);
-    }
-
-    private boolean isBuyableBoss(String bossName) {
-        return "DRAGON_1".equals(bossName) || "DRAGON_2".equals(bossName);
     }
 
     private synchronized void removeClient(GameSubscriber sub) {
