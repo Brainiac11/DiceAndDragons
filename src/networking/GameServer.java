@@ -110,6 +110,23 @@ public class GameServer {
             return;
         }
 
+        int totalPurchased = 0;
+        for (PlayerInfo p : players) {
+            if (p.purchasedItems != null) {
+                for (String pi : p.purchasedItems) {
+                    if (pi.equals(cleanItem)) {
+                        totalPurchased++;
+                    }
+                }
+            }
+        }
+
+        if (totalPurchased >= marketItem.getQuantity()) {
+            chatLog.add("No more " + cleanItem + " variants available.");
+            broadcastLobbyState();
+            return;
+        }
+
         teamGold = teamGold - itemCost;
         String buyer = handle == null ? "Unknown" : handle.trim();
         if (buyer.isEmpty()) {

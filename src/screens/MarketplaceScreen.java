@@ -69,7 +69,7 @@ public class MarketplaceScreen extends JPanel {
         headerPanel.add(startGameButton);
         add(headerPanel, BorderLayout.NORTH);
 
-        marketTableModel = new DefaultTableModel(new String[] { "Item", "Cost" }, 0) {
+        marketTableModel = new DefaultTableModel(new String[] { "Item", "Cost", "Quantity" }, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -138,7 +138,9 @@ public class MarketplaceScreen extends JPanel {
         }
 
         int itemCost = parseCost(marketTableModel.getValueAt(selectedRow, 1));
-        if (itemCost > currentTeamGold) {
+        int itemQty = Integer.parseInt(String.valueOf(marketTableModel.getValueAt(selectedRow, 2)));
+
+        if (itemCost > currentTeamGold || itemQty <= 0) {
             updateActionButtonsState();
             return;
         }
@@ -187,7 +189,7 @@ public class MarketplaceScreen extends JPanel {
         }
 
         setTeamGold(state.teamGold);
-        refreshMarket(state.selectedDragon);
+        refreshMarket(state);
         refreshPlayerItemBoxes(state.players);
         refreshLocalInventory(state.players);
 
@@ -205,8 +207,16 @@ public class MarketplaceScreen extends JPanel {
         goldLabel.setText("Team Gold: " + teamGold);
     }
 
-    private void refreshMarket(String dragonSelection) {
+    private void refreshMarket(LobbyState state) {
+        String dragonSelection = state.selectedDragon;
         DragonCatalog.DragonProfile dragon = DragonCatalog.findBySelection(dragonSelection);
+
+        String previouslySelected = null;
+        int selectedRow = marketTable.getSelectedRow();
+        if (selectedRow >= 0 && selectedRow < marketTableModel.getRowCount()) {
+            previouslySelected = String.valueOf(marketTableModel.getValueAt(selectedRow, 0));
+        }
+
         marketTableModel.setRowCount(0);
 
         if (dragon == null) {
@@ -227,15 +237,35 @@ public class MarketplaceScreen extends JPanel {
         marketTitleLabel.setText("Village Marketplace - " + market.getVillageName());
         dragonLabel.setText("Dragon: " + dragon.getDisplayName());
 
+        int newSelectedIndex = 0;
+        int index = 0;
         for (VillageMarketplaceCatalog.MarketplaceItem item : market.getItems()) {
+            int remaining = item.getQuantity();
+            if (state.players != null) {
+                for (PlayerInfo p : state.players) {
+                    if (p.purchasedItems != null) {
+                        for (String purchased : p.purchasedItems) {
+                            if (purchased.equals(item.getName())) {
+                                remaining--;
+                            }
+                        }
+                    }
+                }
+            }
             marketTableModel.addRow(new Object[] {
                     item.getName(),
-                    item.getCost()
+                    item.getCost(),
+                    remaining
             });
+
+            if (item.getName().equals(previouslySelected)) {
+                newSelectedIndex = index;
+            }
+            index++;
         }
 
         if (marketTableModel.getRowCount() > 0) {
-            marketTable.setRowSelectionInterval(0, 0);
+            marketTable.setRowSelectionInterval(newSelectedIndex, newSelectedIndex);
         }
         updateActionButtonsState();
     }
@@ -306,20 +336,16 @@ public class MarketplaceScreen extends JPanel {
 
     private void refreshLocalInventory(ArrayList<PlayerInfo> players) {
         localPurchasedItems.clear();
-
         if (localHandle.isEmpty() || players == null) {
             return;
         }
-
         for (PlayerInfo player : players) {
             if (player == null || player.handle == null || !player.handle.equalsIgnoreCase(localHandle)) {
                 continue;
             }
-
             if (player.purchasedItems == null) {
                 return;
             }
-
             for (String itemName : player.purchasedItems) {
                 if (itemName == null) {
                     continue;
@@ -361,8 +387,9 @@ public class MarketplaceScreen extends JPanel {
         }
 
         int itemCost = parseCost(marketTableModel.getValueAt(selectedRow, 1));
+        int itemQty = Integer.parseInt(String.valueOf(marketTableModel.getValueAt(selectedRow, 2)));
         String itemName = String.valueOf(marketTableModel.getValueAt(selectedRow, 0));
-        buySelectedButton.setEnabled(itemCost <= currentTeamGold);
+        buySelectedButton.setEnabled(itemCost <= currentTeamGold && itemQty > 0);
         sellSelectedButton.setEnabled(localPlayerOwnsItem(itemName));
     }
 

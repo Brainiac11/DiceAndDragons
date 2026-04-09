@@ -75,91 +75,96 @@ public final class VillageMarketplaceCatalog {
         Map<String, Marketplace> map = new LinkedHashMap<>();
 
         map.put("YOUNG_RED_DRAGON", market("Bearwood Marketplace",
-                "Small Healing Potion",
-                "Scroll of Knowledge",
-                "Haste Potion",
-                "Holy Water",
-                "Mana Potion"));
+                "Small Healing Potion:3",
+                "Scroll of Knowledge:2",
+                "Haste Potion:3",
+                "Holy Water:1",
+                "Mana Potion:1"));
 
         map.put("PALE_DRAGON", market("Bearwood Marketplace",
-                "Small Healing Potion",
-                "Healing Potion",
-                "Scroll of Knowledge",
-                "Haste Potion",
-                "Vision Potion",
-                "Holy Water",
-                "Mana Potion",
-                "Stealth Potion",
-                "Steel Shield"));
+                "Small Healing Potion:3",
+                "Healing Potion:2",
+                "Scroll of Knowledge:2",
+                "Haste Potion:2",
+                "Vision Potion:1",
+                "Holy Water:1",
+                "Mana Potion:1",
+                "Stealth Potion:1",
+                "Steel Shield:1"));
 
         map.put("YOUNG_BLACK_DRAGON", market("Angelos Marketplace",
-                "Small Healing Potion",
-                "Healing Potion",
-                "Holy Water",
-                "Stealth Potion",
-                "Steel Shield",
-                "Magic Sword",
-                "Pinpoint Crossbow"));
+                "Small Healing Potion:3",
+                "Healing Potion:2",
+                "Holy Water:1",
+                "Stealth Potion:1",
+                "Steel Shield:1",
+                "Magic Sword:1",
+                "Pinpoint Crossbow:1"));
 
         map.put("GREEN_DRAGON", market("Raindrop Keep Marketplace",
-                "Healing Potion",
-                "Great Healing Potion",
-                "Scroll of Knowledge",
-                "Strength Potion",
-                "Great Haste Potion",
-                "Blessed Hammer",
-                "Gauntlets of Power",
-                "Magic Staff"));
+                "Healing Potion:3",
+                "Great Healing Potion:2",
+                "Scroll of Knowledge:2",
+                "Strength Potion:2",
+                "Great Haste Potion:2",
+                "Blessed Hammer:1",
+                "Gauntlets of Power:1",
+                "Magic Staff:1"));
 
         map.put("RED_DRAGON", market("Deepridge Burrow Marketplace",
-                "Healing Potion",
-                "Great Healing Potion",
-                "Scroll of Knowledge",
-                "Strength Potion",
-                "Great Haste Potion",
-                "Blessed Hammer",
-                "Gauntlets of Power",
-                "Magic Staff"));
+                "Healing Potion:3",
+                "Great Healing Potion:2",
+                "Scroll of Knowledge:2",
+                "Strength Potion:2",
+                "Great Haste Potion:2",
+                "Blessed Hammer:1",
+                "Gauntlets of Power:1",
+                "Magic Staff:1"));
 
         map.put("BLUE_DRAGON", market("Bearwood Marketplace",
-                "Healing Potion",
-                "Great Healing Potion",
-                "Scroll of Knowledge",
-                "Holy Water",
-                "Great Haste Potion",
-                "Magic Sword"));
+                "Healing Potion:3",
+                "Great Healing Potion:2",
+                "Scroll of Knowledge:2",
+                "Holy Water:2",
+                "Great Haste Potion:2",
+                "Magic Sword:1"));
 
         map.put("UNDEAD_DRAGON", market("Kemora Marketplace",
-                "Healing Potion",
-                "Great Healing Potion",
-                "Scroll of Knowledge",
-                "Stealth Potion",
-                "Great Haste Potion",
-                "Vision Potion",
-                "Gauntlets of Power",
-                "Staff of Healing"));
+                "Healing Potion:3",
+                "Great Healing Potion:2",
+                "Scroll of Knowledge:2",
+                "Stealth Potion:2",
+                "Great Haste Potion:2",
+                "Vision Potion:2",
+                "Gauntlets of Power:1",
+                "Staff of Healing:1"));
 
         map.put("BLACK_DRAGON", market("Jovryk Marketplace",
-                "Healing Potion",
-                "Great Healing Potion",
-                "Scroll of Knowledge",
-                "Stealth Potion",
-                "Great Haste Potion",
-                "Vision Potion",
-                "Gauntlets of Power",
-                "Staff of Healing"));
+                "Healing Potion:3",
+                "Great Healing Potion:2",
+                "Scroll of Knowledge:2",
+                "Stealth Potion:2",
+                "Great Haste Potion:2",
+                "Vision Potion:2",
+                "Gauntlets of Power:1",
+                "Staff of Healing:1"));
 
         return map;
     }
 
-    private static Marketplace market(String villageName, String... itemNames) {
+    private static Marketplace market(String villageName, String... itemEntries) {
         ArrayList<MarketplaceItem> items = new ArrayList<>();
-        for (String itemName : itemNames) {
+        for (String entry : itemEntries) {
+            String[] parts = entry.split(":");
+            String itemName = parts[0];
+            int quantity = parts.length > 1 ? Integer.parseInt(parts[1]) : 1;
+
             ItemDefinition definition = kItemDescriptions.get(itemName);
             if (definition == null) {
                 throw new IllegalStateException("Unknown marketplace item: " + itemName);
             }
-            items.add(new MarketplaceItem(definition.name, definition.type, definition.effect, definition.cost));
+            items.add(new MarketplaceItem(definition.name, definition.type, definition.effect, definition.cost,
+                    quantity));
         }
         return new Marketplace(villageName, items);
     }
@@ -205,12 +210,14 @@ public final class VillageMarketplaceCatalog {
         private final ItemEnum type;
         private final String effect;
         private final int cost;
+        private final int quantity;
 
-        private MarketplaceItem(String name, ItemEnum type, String effect, int cost) {
+        private MarketplaceItem(String name, ItemEnum type, String effect, int cost, int quantity) {
             this.name = name;
             this.type = type;
             this.effect = effect;
             this.cost = cost;
+            this.quantity = quantity;
         }
 
         public String getName() {
@@ -227,6 +234,10 @@ public final class VillageMarketplaceCatalog {
 
         public int getCost() {
             return cost;
+        }
+
+        public int getQuantity() {
+            return quantity;
         }
     }
 }
