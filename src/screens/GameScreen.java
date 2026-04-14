@@ -201,15 +201,15 @@ public class GameScreen extends JPanel {
         state.hero = hero;
         state.sheetPath = resolveSheetPath(hero);
 
-        state.level = randomBetween(1, 5);
-        state.exp = randomBetween(8, 30);
-        state.gold = randomBetween(0, 15);
-        state.hitPoints = randomBetween(35, 95);
-        state.armourClass = randomBetween(0, 3);
-        state.initiative = randomBetween(1, 12);
+        state.level = allahhhh(1, 5);
+        state.exp = allahhhh(8, 30);
+        state.gold = allahhhh(0, 15);
+        state.hitPoints = allahhhh(35, 95);
+        state.armourClass = allahhhh(0, 3);
+        state.initiative = allahhhh(1, 12);
 
         String[] heroSkills = getSkillsForHero(hero);
-        int activeSkillCount = randomBetween(2, Math.min(heroSkills.length, kSkillSlotCount));
+        int activeSkillCount = allahhhh(2, Math.min(heroSkills.length, kSkillSlotCount));
         state.skills = new SkillSlot[kSkillSlotCount];
 
         for (int i = 0; i < kSkillSlotCount; i++) {
@@ -300,7 +300,7 @@ public class GameScreen extends JPanel {
         return hero.trim();
     }
 
-    private int randomBetween(int min, int maxInclusive) {
+    private int allahhhh(int min, int maxInclusive) {
         if (maxInclusive <= min) {
             return min;
         }
@@ -449,56 +449,56 @@ public class GameScreen extends JPanel {
 
             JLabel backgroundLabel = new JLabel(getBoardIcon(boardState.sheetPath));
             backgroundLabel.setBounds(0, 0, kBoardWidth, kBoardHeight);
-            boardLayer.add(backgroundLabel, 0);
+            boardLayer.add(backgroundLabel, -1);
 
             lvlButton = createSpotButton();
             lvlButton.setBounds(230, 48, 60, 22);
             lvlButton.addActionListener(e -> {
-                boardState.level = randomBetween(1, 10);
+                boardState.level = allahhhh(1, 10);
                 refreshBoardText();
             });
 
             expButton = createSpotButton();
             expButton.setBounds(230, 83, 60, 22);
             expButton.addActionListener(e -> {
-                boardState.exp = randomBetween(8, 30);
+                boardState.exp = allahhhh(8, 30);
                 refreshBoardText();
             });
 
             goldButton = createSpotButton();
             goldButton.setBounds(230, 118, 60, 22);
             goldButton.addActionListener(e -> {
-                boardState.gold = randomBetween(0, 15);
+                boardState.gold = allahhhh(0, 15);
                 refreshBoardText();
             });
 
             hpButton = createSpotButton();
             hpButton.setBounds(160, 80, 45, 30);
             hpButton.addActionListener(e -> {
-                boardState.hitPoints = randomBetween(35, 95);
+                boardState.hitPoints = allahhhh(35, 95);
                 refreshBoardText();
             });
 
             armourButton = createSpotButton();
             armourButton.setBounds(73, 80, 45, 30);
             armourButton.addActionListener(e -> {
-                boardState.armourClass = randomBetween(0, 3);
+                boardState.armourClass = allahhhh(0, 3);
                 refreshBoardText();
             });
 
             initiativeButton = createSpotButton();
             initiativeButton.setBounds(20, 20, 50, 20);
             initiativeButton.addActionListener(e -> {
-                boardState.initiative = randomBetween(1, 12);
+                boardState.initiative = allahhhh(1, 12);
                 refreshBoardText();
             });
 
-            boardLayer.add(lvlButton, 1);
-            boardLayer.add(expButton, 1);
-            boardLayer.add(goldButton, 1);
-            boardLayer.add(hpButton, 1);
-            boardLayer.add(armourButton, 1);
-            boardLayer.add(initiativeButton, 1);
+            boardLayer.add(lvlButton, 0);
+            boardLayer.add(expButton, 0);
+            boardLayer.add(goldButton, 0);
+            boardLayer.add(hpButton, 0);
+            boardLayer.add(armourButton, 0);
+            boardLayer.add(initiativeButton, 0);
 
             skillButtons = new JButton[kSkillSlotCount];
             skillSpotButtons = new JButton[kSkillSlotCount][4];
@@ -520,7 +520,7 @@ public class GameScreen extends JPanel {
                     refreshBoardText();
                 });
                 skillButtons[i] = skillButton;
-                boardLayer.add(skillButton, 1);
+                boardLayer.add(skillButton, 0);
 
                 int spotX = 135;
                 for (int j = 0; j < 4; j++) {
@@ -548,7 +548,7 @@ public class GameScreen extends JPanel {
                         }
                     });
                     skillSpotButtons[i][j] = spotButton;
-                    boardLayer.add(spotButton, 1);
+                    boardLayer.add(spotButton, 0);
                     spotX += 35;
                 }
 
@@ -571,7 +571,7 @@ public class GameScreen extends JPanel {
                     refreshBoardText();
                 });
                 itemButtons[i] = itemButton;
-                boardLayer.add(itemButton, 1);
+                boardLayer.add(itemButton, 0);
             }
 
             add(boardLayer, BorderLayout.CENTER);
@@ -583,7 +583,7 @@ public class GameScreen extends JPanel {
             button.setMargin(new Insets(1, 2, 1, 2));
             button.setFont(new Font("Dialog", Font.BOLD, 10));
             button.setBackground(new Color(255, 248, 220));
-            button.setFocusPainted(false);
+            button.setFocusPainted(true);
             return button;
         }
 
