@@ -63,6 +63,7 @@ public class ConnectionScreen extends JFrame {
         super("Dice and Dragons");
         setSize(800, 670);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
 
         // allah
         makeMain();
@@ -181,16 +182,26 @@ public class ConnectionScreen extends JFrame {
         if (!host || s == null) {
             return;
         }
-
+        LobbyState currentState = s.getCurrentLobbyState();
         s.openGameScreenForAllPlayers();
-        openGameplayScreen();
+        openGameplayScreen(currentState);
     }
 
-    private void openGameplayScreen() {
+    private void openGameplayScreen(LobbyState lobbyState) {
         inMarketplace = false;
-        setContentPane(new GameScreen());
+
+        LobbyState state = lobbyState;
+        if (state == null && host && s != null) {
+            state = s.getCurrentLobbyState();
+        }
+
+        setContentPane(new GameScreen(state, me, this::sendGameplayChatMessage));
         revalidate();
         repaint();
+    }
+
+    private void sendGameplayChatMessage(String message) {
+        sendChatMessage(message);
     }
 
     private void selectDragon() {
@@ -449,7 +460,7 @@ public class ConnectionScreen extends JFrame {
         }
 
         if (GameMessage.OPEN_GAME_SCREEN.equals(gt.type)) {
-            openGameplayScreen();
+            openGameplayScreen(state);
             return;
         }
 
@@ -463,6 +474,12 @@ public class ConnectionScreen extends JFrame {
             }
             return;
         }
+
+        if (getContentPane() instanceof GameScreen gameScreen) {
+            gameScreen.updateFromLobbyState(state);
+            return;
+        }
+
         String selectedDragonDisplayName = DragonCatalog.toDisplayName(state.selectedDragon);
         if (selectedDragonDisplayName != null && !selectedDragonDisplayName.isEmpty()) {
             noDragonEvent = true;
@@ -546,7 +563,7 @@ public class ConnectionScreen extends JFrame {
 
                     updateThePaintOnLobby(gt);
                 }
-            } catch (Exception e) {
+            } catch (IOException | ClassNotFoundException e) {
                 stopAll();
                 openMain();
                 stat.setText("Lobby disconcnneted");
