@@ -1,9 +1,6 @@
 package src.skills;
 
 public enum SkillEnum {
-    ATTACK,
-    HEALING,
-    STANCE,
     BLESSING,
     SHIELD,
     PINDOWN,

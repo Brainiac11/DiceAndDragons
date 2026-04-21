@@ -6,6 +6,7 @@ import java.util.Map;
 import src.players.DragonCatalog;
 
 public final class VillageMarketplaceCatalog {
+    private static final int kSkillCost = 5;
     private static final Map<String, ItemDefinition> kItemDescriptions = createItemDefinitions();
     private static final Map<String, Marketplace> kMarketDragonIdMap = createMarketByDragonId();
 
@@ -68,6 +69,16 @@ public final class VillageMarketplaceCatalog {
         putItem(map, "Staff of Healing", ItemEnum.DURABLE,
                 "+1 HP extra healing when activating a Healing Skill", 4);
 
+        putSkill(map, "Blessing", "Grant a temporary team buff.");
+        putSkill(map, "Shield", "Absorb incoming damage.");
+        putSkill(map, "Pin Down", "Restrict the dragon's movement.");
+        putSkill(map, "Genie", "Cast a powerful random magic effect.");
+        putSkill(map, "Bestial Pounce", "Perform a fast burst attack.");
+        putSkill(map, "Drain Life", "Steal HP from the dragon.");
+        putSkill(map, "Healing Wave", "Heal multiple teammates.");
+        putSkill(map, "Jab", "Use a quick precision attack.");
+        putSkill(map, "Treat Wounds", "Apply a stronger heal over time.");
+
         return map;
     }
 
@@ -79,7 +90,9 @@ public final class VillageMarketplaceCatalog {
                 "Scroll of Knowledge:2",
                 "Haste Potion:3",
                 "Holy Water:1",
-                "Mana Potion:1"));
+                "Mana Potion:1",
+                "Jab:1",
+                "Shield:1"));
 
         map.put("PALE_DRAGON", market("Bearwood Marketplace",
                 "Small Healing Potion:3",
@@ -90,7 +103,9 @@ public final class VillageMarketplaceCatalog {
                 "Holy Water:1",
                 "Mana Potion:1",
                 "Stealth Potion:1",
-                "Steel Shield:1"));
+                "Steel Shield:1",
+                "Treat Wounds:1",
+                "Shield:1"));
 
         map.put("YOUNG_BLACK_DRAGON", market("Angelos Marketplace",
                 "Small Healing Potion:3",
@@ -99,7 +114,9 @@ public final class VillageMarketplaceCatalog {
                 "Stealth Potion:1",
                 "Steel Shield:1",
                 "Magic Sword:1",
-                "Pinpoint Crossbow:1"));
+                "Pinpoint Crossbow:1",
+                "Pin Down:1",
+                "Jab:1"));
 
         map.put("GREEN_DRAGON", market("Raindrop Keep Marketplace",
                 "Healing Potion:3",
@@ -109,7 +126,9 @@ public final class VillageMarketplaceCatalog {
                 "Great Haste Potion:2",
                 "Blessed Hammer:1",
                 "Gauntlets of Power:1",
-                "Magic Staff:1"));
+                "Magic Staff:1",
+                "Blessing:1",
+                "Healing Wave:1"));
 
         map.put("RED_DRAGON", market("Deepridge Burrow Marketplace",
                 "Healing Potion:3",
@@ -119,7 +138,9 @@ public final class VillageMarketplaceCatalog {
                 "Great Haste Potion:2",
                 "Blessed Hammer:1",
                 "Gauntlets of Power:1",
-                "Magic Staff:1"));
+                "Magic Staff:1",
+                "Jab:1",
+                "Treat Wounds:1"));
 
         map.put("BLUE_DRAGON", market("Bearwood Marketplace",
                 "Healing Potion:3",
@@ -127,7 +148,9 @@ public final class VillageMarketplaceCatalog {
                 "Scroll of Knowledge:2",
                 "Holy Water:2",
                 "Great Haste Potion:2",
-                "Magic Sword:1"));
+                "Magic Sword:1",
+                "Genie:1",
+                "Treat Wounds:1"));
 
         map.put("UNDEAD_DRAGON", market("Kemora Marketplace",
                 "Healing Potion:3",
@@ -137,7 +160,9 @@ public final class VillageMarketplaceCatalog {
                 "Great Haste Potion:2",
                 "Vision Potion:2",
                 "Gauntlets of Power:1",
-                "Staff of Healing:1"));
+                "Staff of Healing:1",
+                "Drain Life:1",
+                "Treat Wounds:1"));
 
         map.put("BLACK_DRAGON", market("Jovryk Marketplace",
                 "Healing Potion:3",
@@ -147,7 +172,9 @@ public final class VillageMarketplaceCatalog {
                 "Great Haste Potion:2",
                 "Vision Potion:2",
                 "Gauntlets of Power:1",
-                "Staff of Healing:1"));
+                "Staff of Healing:1",
+                "Bestial Pounce:1",
+                "Shield:1"));
 
         return map;
     }
@@ -171,6 +198,10 @@ public final class VillageMarketplaceCatalog {
 
     private static void putItem(Map<String, ItemDefinition> map, String name, ItemEnum type, String effect, int cost) {
         map.put(name, new ItemDefinition(name, type, effect, cost));
+    }
+
+    private static void putSkill(Map<String, ItemDefinition> map, String name, String effect) {
+        map.put(name, new ItemDefinition(name, ItemEnum.SKILL, effect, kSkillCost));
     }
 
     private static final class ItemDefinition {

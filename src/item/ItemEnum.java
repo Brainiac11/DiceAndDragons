@@ -2,5 +2,6 @@ package src.item;
 
 public enum ItemEnum {
     INSTANT,
-    DURABLE;
+    DURABLE,
+    SKILL;
 }
