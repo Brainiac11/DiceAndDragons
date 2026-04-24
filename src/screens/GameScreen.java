@@ -37,7 +37,7 @@ public class GameScreen extends JPanel {
     private static final int kBoardWidth = 320;
     private static final int kBoardHeight = 460;
     private static final int kItemSlotCount = 2;
-    private static final int kSkillSlotCount = 6;
+    private static final int kSkillSlotCount = 8;
     private static final int kStartingLevel = 1;
     private static final int kDefaultXp = 0;
     private static final String kBoardBakupPath = "imgs/blank_sheet.png";
@@ -498,6 +498,21 @@ public class GameScreen extends JPanel {
         map.put(Heroes.ROGUE,
                 new String[] { "Sneak Attack", "Deflect", "Stab", "Flanking Blow", "Sudden Death", "Poison Tip" });
 
+//        map.put(Heroes.WARRIOR,
+//                new String[] {});
+//
+//        map.put(Heroes.WIZARD,
+//                new String[] {});
+//
+//        map.put(Heroes.CLERIC,
+//                new String[] {});
+//
+//        map.put(Heroes.RANGER,
+//                new String[] {});
+//
+//        map.put(Heroes.ROGUE,
+//                new String[] {});
+
         return map;
     }
 
@@ -639,8 +654,12 @@ public class GameScreen extends JPanel {
             JButton button = new JButton();
             button.setMargin(new Insets(1, 2, 1, 2));
             button.setFont(new Font("Dialog", Font.BOLD, 10));
-            button.setBackground(new Color(255, 248, 220));
-            button.setFocusPainted(true);
+//            button.setBackground(new Color(255, 248, 220));
+//            button.setFocusPainted(true);
+            button.setOpaque(false);
+            button.setContentAreaFilled(false);
+            button.setBorderPainted(false);
+            button.setFocusPainted(false);
             return button;
         }
 
