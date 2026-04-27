@@ -728,7 +728,7 @@ public class GameScreen extends JPanel {
             for (int i = 0; i < kSkillSlotCount; i++) {
                 final int skillIndex = i;
                 JButton skillButton = createSpotButton();
-                skillButton.setBounds(15, skillY, 115, 22);
+                skillButton.setBounds(15, skillY, 115-28, 22);
                 skillButton.addActionListener(e -> {
                     SkillSlot slot = boardState.skills[skillIndex];
                     if (slot.locked) {
@@ -740,16 +740,16 @@ public class GameScreen extends JPanel {
                 skillButtons[i] = skillButton;
                 boardLayer.add(skillButton, 0);
 
-                int spotX = 135;
+                int spotX = 135-29;
                 for (int j = 0; j < kSkillSymbolCount; j++) {
                     JButton spotButton = createSpotButton();
                     spotButton.setBounds(spotX, skillY, 24, 22);
                     skillSpotButtons[i][j] = spotButton;
                     boardLayer.add(spotButton, 0);
-                    spotX += 30;
+                    spotX += 31;
                 }
 
-                skillY += 38;
+                skillY += 35;
             }
 
             itemButtons = new JButton[kItemSlotCount];
@@ -774,12 +774,12 @@ public class GameScreen extends JPanel {
             JButton button = new JButton();
             button.setMargin(new Insets(1, 2, 1, 2));
             button.setFont(new Font("Dialog", Font.BOLD, 10));
-            // button.setBackground(new Color(255, 248, 220));
-            // button.setFocusPainted(true);
-            button.setOpaque(false);
-            button.setContentAreaFilled(false);
-            button.setBorderPainted(false);
-            button.setFocusPainted(false);
+             button.setBackground(new Color(255, 250, 190));
+             button.setFocusPainted(true);
+//            button.setOpaque(false);
+//            button.setContentAreaFilled(false);
+//            button.setBorderPainted(false);
+//            button.setFocusPainted(false);
             return button;
         }
 
