@@ -4,11 +4,15 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import src.item.ItemEnum;
 import src.item.VillageMarketplaceCatalog;
 import src.players.DragonCatalog;
+import src.players.Heroes;
 
 public class GameServer {
-    private static final int STARTING_GOLD_PER_PLAYER = 10;
+    private static final int kStartingGoldPerPlayer = 10;
+    private static final int kMaxItemsPerPlayer = 2;
+    private static final int kSkillSlotCount = 8;
 
     private final ServerSocket serverSocket;
     private final ArrayList<GameSubscriber> clients = new ArrayList<>();
@@ -68,10 +72,10 @@ public class GameServer {
 
     private synchronized void recalculateTeamGold() {
         if (players.isEmpty()) {
-            teamGold = STARTING_GOLD_PER_PLAYER;
+            teamGold = kStartingGoldPerPlayer;
             return;
         }
-        teamGold = players.size() * STARTING_GOLD_PER_PLAYER;
+        teamGold = players.size() * kStartingGoldPerPlayer;
     }
 
     public synchronized void setHostHero(String hero) {
@@ -103,6 +107,29 @@ public class GameServer {
             return;
         }
 
+        PlayerInfo buyerInfo = findPlayerByHandle(handle);
+        if (buyerInfo == null) {
+            return;
+        }
+
+        String buyer = buyerInfo.handle;
+        if (marketItem.getType() == ItemEnum.SKILL) {
+            int maxPurchasedSkills = getMaxPurchasedSkillsForHero(buyerInfo.hero);
+            int ownedSkills = countPurchasedByType(buyerInfo, true);
+            if (ownedSkills >= maxPurchasedSkills) {
+                chatLog.add(buyer + " cannot buy more skills.");
+                broadcastLobbyState();
+                return;
+            }
+        } else {
+            int ownedItems = countPurchasedByType(buyerInfo, false);
+            if (ownedItems >= kMaxItemsPerPlayer) {
+                chatLog.add(buyer + " already has the maximum of " + kMaxItemsPerPlayer + " items");
+                broadcastLobbyState();
+                return;
+            }
+        }
+
         int itemCost = marketItem.getCost();
         if (teamGold < itemCost) {
             chatLog.add("No team gold left for " + cleanItem + ".");
@@ -128,16 +155,7 @@ public class GameServer {
         }
 
         teamGold = teamGold - itemCost;
-        String buyer = handle == null ? "Unknown" : handle.trim();
-        if (buyer.isEmpty()) {
-            buyer = "Unknown";
-        }
-
-        PlayerInfo buyerInfo = findPlayerByHandle(buyer);
-        if (buyerInfo != null) {
-            buyerInfo.purchasedItems.add(cleanItem);
-            buyer = buyerInfo.handle;
-        }
+        buyerInfo.purchasedItems.add(cleanItem);
 
         chatLog.add(buyer + " bought " + cleanItem + " for " + itemCost + " gold.");
         broadcastLobbyState();
@@ -364,6 +382,52 @@ public class GameServer {
         }
 
         return false;
+    }
+
+    private int countPurchasedByType(PlayerInfo player, boolean skillType) {
+        if (player == null || player.purchasedItems == null) {
+            return 0;
+        }
+
+        int total = 0;
+        for (String purchasedName : player.purchasedItems) {
+            if (isSkillPurchase(purchasedName) == skillType) {
+                total++;
+            }
+        }
+        return total;
+    }
+
+    private boolean isSkillPurchase(String purchasedName) {
+        if (purchasedName == null) {
+            return false;
+        }
+
+        VillageMarketplaceCatalog.MarketplaceItem marketItem = VillageMarketplaceCatalog.findItem(selectedDragon,
+                purchasedName.trim());
+        return marketItem != null && marketItem.getType() == ItemEnum.SKILL;
+    }
+
+    private int getMaxPurchasedSkillsForHero(String heroName) {
+        int availableSkillSlots = kSkillSlotCount - getDefaultSkillCount(heroName);
+        return Math.max(0, availableSkillSlots);
+    }
+
+    private int getDefaultSkillCount(String heroName) {
+        if (heroName == null) {
+            return 0;
+        }
+
+        String cleanHeroName = heroName.trim();
+        if (cleanHeroName.equals(Heroes.WARRIOR)
+                || cleanHeroName.equals(Heroes.WIZARD)
+                || cleanHeroName.equals(Heroes.CLERIC)
+                || cleanHeroName.equals(Heroes.RANGER)
+                || cleanHeroName.equals(Heroes.ROGUE)) {
+            return 6;
+        }
+
+        return 0;
     }
 
     private boolean isRealHero(String hero) {

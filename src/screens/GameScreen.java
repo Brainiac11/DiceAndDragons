@@ -38,12 +38,21 @@ public class GameScreen extends JPanel {
     private static final int kBoardHeight = 460;
     private static final int kItemSlotCount = 2;
     private static final int kSkillSlotCount = 8;
+    private static final int kSkillSymbolCount = 5;
     private static final int kStartingLevel = 1;
     private static final int kDefaultXp = 0;
     private static final String kBoardBakupPath = "imgs/blank_sheet.png";
+    private static final String kSkillSymbolMatch = "=";
+    private static final String kSkillSymbolDifferent = "!=";
+    private static final String kSkillSymbolSword = "S";
+    private static final String kSkillSymbolMagic = "M";
+    private static final String kSkillSymbolCrossbow = "C";
+    private static final String kSkillSymbolDagger = "D";
+    private static final String kSkillSymbolHammer = "H";
 
     private static final Map<String, String> kHeroToSheetPaths = createHeroToSheetPathMap();
     private static final Map<String, String[]> kHeroToSkills = createHeroToSkillsMap();
+    private static final Map<String, String[]> kSkillToRequiredSymbols = createSkillToRequiredSymbolsMap();
     private static final Map<String, HeroStats> kHeroToStats = createHeroToStatsMap();
 
     private JPanel boardsPanel;
@@ -255,11 +264,11 @@ public class GameScreen extends JPanel {
         for (int i = 0; i < kSkillSlotCount; i++) {
             SkillSlot slot = new SkillSlot();
             if (i < heroSkills.length) {
-                slot.name = heroSkills[i];
+                setSkillNameAndRequirements(slot, heroSkills[i]);
                 slot.locked = false;
                 slot.covered = false;
             } else {
-                slot.name = "Locked";
+                setSkillNameAndRequirements(slot, "Locked");
                 slot.locked = true;
                 slot.covered = true;
             }
@@ -338,14 +347,18 @@ public class GameScreen extends JPanel {
             slotIndex++;
         }
 
-        for (int i = 0; i < boughtSkills.size() && i < kSkillSlotCount; i++) {
-            SkillSlot slot = boardState.skills[i];
-            slot.name = boughtSkills.get(i);
+        int boughtSkillIndex = 0;
+        for (int slotIndexToFill = 0; slotIndexToFill < kSkillSlotCount && boughtSkillIndex < boughtSkills
+                .size(); slotIndexToFill++) {
+            if (boardState.baseSkillLocked == null || !boardState.baseSkillLocked[slotIndexToFill]) {
+                continue;
+            }
+
+            SkillSlot slot = boardState.skills[slotIndexToFill];
+            setSkillNameAndRequirements(slot, boughtSkills.get(boughtSkillIndex));
             slot.locked = false;
             slot.covered = false;
-            for (int j = 0; j < slot.spots.length; j++) {
-                slot.spots[j] = "";
-            }
+            boughtSkillIndex++;
         }
     }
 
@@ -359,9 +372,7 @@ public class GameScreen extends JPanel {
             slot.name = boardState.baseSkillNames[i];
             slot.covered = boardState.baseSkillCovered[i];
             slot.locked = boardState.baseSkillLocked[i];
-            for (int j = 0; j < slot.spots.length; j++) {
-                slot.spots[j] = "";
-            }
+            setSkillNameAndRequirements(slot, slot.name);
         }
     }
 
@@ -420,6 +431,53 @@ public class GameScreen extends JPanel {
             return new String[0];
         }
         return skills;
+    }
+
+    private void setSkillNameAndRequirements(SkillSlot slot, String skillName) {
+        slot.name = skillName == null ? "" : skillName;
+        String[] requiredSymbols = kSkillToRequiredSymbols.get(toSkillKey(skillName));
+        for (int i = 0; i < kSkillSymbolCount; i++) {
+            if (requiredSymbols != null && i < requiredSymbols.length && requiredSymbols[i] != null) {
+                slot.requiredSymbols[i] = requiredSymbols[i];
+            } else {
+                slot.requiredSymbols[i] = "";
+            }
+        }
+    }
+
+    private String getSymbolDescription(String symbol) {
+        if (symbol == null || symbol.isBlank()) {
+            return null;
+        }
+        if (symbol.equals(kSkillSymbolSword)) {
+            return "Warrior symbol (Sword)";
+        }
+        if (symbol.equals(kSkillSymbolMagic)) {
+            return "Wizard symbol (Magic)";
+        }
+        if (symbol.equals(kSkillSymbolCrossbow)) {
+            return "Ranger symbol (Crossbow)";
+        }
+        if (symbol.equals(kSkillSymbolDagger)) {
+            return "Rogue symbol (Daggers)";
+        }
+        if (symbol.equals(kSkillSymbolHammer)) {
+            return "Cleric symbol (Hammer)";
+        }
+        if (symbol.equals(kSkillSymbolMatch)) {
+            return "Must match the other '=' symbols";
+        }
+        if (symbol.equals(kSkillSymbolDifferent)) {
+            return "Must differ from the other '!=' symbols";
+        }
+        return symbol;
+    }
+
+    private static String toSkillKey(String rawSkillName) {
+        if (rawSkillName == null) {
+            return "";
+        }
+        return rawSkillName.trim().toUpperCase().replace('-', ' ');
     }
 
     private HeroStats getHeroStats(String hero) {
@@ -498,22 +556,105 @@ public class GameScreen extends JPanel {
         map.put(Heroes.ROGUE,
                 new String[] { "Sneak Attack", "Deflect", "Stab", "Flanking Blow", "Sudden Death", "Poison Tip" });
 
-//        map.put(Heroes.WARRIOR,
-//                new String[] {});
-//
-//        map.put(Heroes.WIZARD,
-//                new String[] {});
-//
-//        map.put(Heroes.CLERIC,
-//                new String[] {});
-//
-//        map.put(Heroes.RANGER,
-//                new String[] {});
-//
-//        map.put(Heroes.ROGUE,
-//                new String[] {});
+        // map.put(Heroes.WARRIOR,
+        // new String[] {});
+        //
+        // map.put(Heroes.WIZARD,
+        // new String[] {});
+        //
+        // map.put(Heroes.CLERIC,
+        // new String[] {});
+        //
+        // map.put(Heroes.RANGER,
+        // new String[] {});
+        //
+        // map.put(Heroes.ROGUE,
+        // new String[] {});
 
         return map;
+    }
+
+    private static Map<String, String[]> createSkillToRequiredSymbolsMap() {
+        LinkedHashMap<String, String[]> map = new LinkedHashMap<>();
+
+        putSkillRequirements(map, "Strike", kSkillSymbolMagic, kSkillSymbolSword, kSkillSymbolDagger);
+        putSkillRequirements(map, "Wild Strike", kSkillSymbolCrossbow, kSkillSymbolSword, kSkillSymbolDagger);
+        putSkillRequirements(map, "Holy Strike", kSkillSymbolHammer, kSkillSymbolSword, kSkillSymbolMagic);
+        putSkillRequirements(map, "Critical Hit", kSkillSymbolMagic, kSkillSymbolSword, kSkillSymbolDagger,
+                kSkillSymbolCrossbow, kSkillSymbolHammer);
+
+        putSkillRequirements(map, "Slash", kSkillSymbolSword, kSkillSymbolSword);
+        putSkillRequirements(map, "Smashing Blow", kSkillSymbolSword, kSkillSymbolSword, kSkillSymbolSword);
+        putSkillRequirements(map, "Savage Attack", kSkillSymbolSword, kSkillSymbolSword, kSkillSymbolSword,
+                kSkillSymbolSword);
+        putSkillRequirements(map, "Parry", kSkillSymbolSword, kSkillSymbolSword, kSkillSymbolDifferent,
+                kSkillSymbolDifferent, kSkillSymbolDifferent);
+
+        putSkillRequirements(map, "Magic Bolt", kSkillSymbolMagic, kSkillSymbolMagic);
+        putSkillRequirements(map, "Fireball", kSkillSymbolMagic, kSkillSymbolMagic, kSkillSymbolMagic);
+        putSkillRequirements(map, "Lightning Storm", kSkillSymbolMagic, kSkillSymbolMagic, kSkillSymbolCrossbow,
+                kSkillSymbolCrossbow);
+        putSkillRequirements(map, "Shield", kSkillSymbolMagic, kSkillSymbolMagic, kSkillSymbolHammer,
+                kSkillSymbolHammer);
+        putSkillRequirements(map, "Drain Life", kSkillSymbolMagic, kSkillSymbolMagic, kSkillSymbolMagic,
+                kSkillSymbolMagic);
+        putSkillRequirements(map, "Genie", kSkillSymbolMagic, kSkillSymbolMagic, kSkillSymbolDifferent,
+                kSkillSymbolDifferent, kSkillSymbolDifferent);
+
+        putSkillRequirements(map, "Blessing", kSkillSymbolHammer);
+        putSkillRequirements(map, "Smite", kSkillSymbolHammer, kSkillSymbolHammer);
+        putSkillRequirements(map, "Healing Hands", kSkillSymbolHammer, kSkillSymbolHammer, kSkillSymbolHammer);
+        putSkillRequirements(map, "Holy Storm", kSkillSymbolHammer, kSkillSymbolHammer, kSkillSymbolHammer,
+                kSkillSymbolMatch, kSkillSymbolMatch);
+        putSkillRequirements(map, "Holy Water", kSkillSymbolHammer, kSkillSymbolSword, kSkillSymbolMagic);
+        putSkillRequirements(map, "Heal", kSkillSymbolHammer, kSkillSymbolHammer);
+        putSkillRequirements(map, "Healing Wave", kSkillSymbolHammer, kSkillSymbolHammer, kSkillSymbolMatch,
+                kSkillSymbolMatch, kSkillSymbolMatch);
+
+        putSkillRequirements(map, "Accurate Shot", kSkillSymbolCrossbow, kSkillSymbolCrossbow);
+        putSkillRequirements(map, "Dual Shot", kSkillSymbolCrossbow, kSkillSymbolCrossbow, kSkillSymbolCrossbow);
+        putSkillRequirements(map, "Crossfire", kSkillSymbolCrossbow, kSkillSymbolCrossbow, kSkillSymbolCrossbow,
+                kSkillSymbolCrossbow);
+        putSkillRequirements(map, "Pin Down", kSkillSymbolCrossbow, kSkillSymbolCrossbow, kSkillSymbolDagger,
+                kSkillSymbolDagger);
+        putSkillRequirements(map, "Bestial Pounce", kSkillSymbolCrossbow, kSkillSymbolCrossbow,
+                kSkillSymbolDifferent, kSkillSymbolDifferent, kSkillSymbolDifferent);
+        putSkillRequirements(map, "Throwing Axe", kSkillSymbolSword, kSkillSymbolSword, kSkillSymbolCrossbow,
+                kSkillSymbolCrossbow);
+
+        putSkillRequirements(map, "Stab", kSkillSymbolDagger, kSkillSymbolDagger);
+        putSkillRequirements(map, "Flanking Strike", kSkillSymbolDagger, kSkillSymbolDagger, kSkillSymbolDagger);
+        putSkillRequirements(map, "Flanking Blow", kSkillSymbolDagger, kSkillSymbolDagger, kSkillSymbolDagger);
+        putSkillRequirements(map, "Sneak Attack", kSkillSymbolDagger, kSkillSymbolDagger, kSkillSymbolSword,
+                kSkillSymbolSword);
+        putSkillRequirements(map, "Sudden Death", kSkillSymbolDagger, kSkillSymbolDagger, kSkillSymbolDagger,
+                kSkillSymbolMatch, kSkillSymbolMatch);
+        putSkillRequirements(map, "Deflect", kSkillSymbolDagger, kSkillSymbolDagger, kSkillSymbolDifferent,
+                kSkillSymbolDifferent, kSkillSymbolDifferent);
+        putSkillRequirements(map, "Defensive Stance", kSkillSymbolDagger, kSkillSymbolDagger,
+                kSkillSymbolDifferent, kSkillSymbolDifferent, kSkillSymbolDifferent);
+        putSkillRequirements(map, "Poison Tip", kSkillSymbolMagic, kSkillSymbolSword, kSkillSymbolDagger,
+                kSkillSymbolCrossbow, kSkillSymbolHammer);
+
+        putSkillRequirements(map, "Jab", kSkillSymbolMatch, kSkillSymbolMatch, kSkillSymbolMatch);
+        putSkillRequirements(map, "Treat Wounds", kSkillSymbolMatch, kSkillSymbolMatch, kSkillSymbolMatch);
+
+        return map;
+    }
+
+    private static void putSkillRequirements(Map<String, String[]> map, String skillName, String... symbols) {
+        String[] required = new String[kSkillSymbolCount];
+        for (int i = 0; i < kSkillSymbolCount; i++) {
+            required[i] = "";
+        }
+
+        if (symbols != null) {
+            for (int i = 0; i < symbols.length && i < kSkillSymbolCount; i++) {
+                required[i] = symbols[i];
+            }
+        }
+
+        map.put(toSkillKey(skillName), required);
     }
 
     private static Map<String, HeroStats> createHeroToStatsMap() {
@@ -582,7 +723,7 @@ public class GameScreen extends JPanel {
             boardLayer.add(initiativeButton, 0);
 
             skillButtons = new JButton[kSkillSlotCount];
-            skillSpotButtons = new JButton[kSkillSlotCount][4];
+            skillSpotButtons = new JButton[kSkillSlotCount][kSkillSymbolCount];
             int skillY = 175;
             for (int i = 0; i < kSkillSlotCount; i++) {
                 final int skillIndex = i;
@@ -600,33 +741,12 @@ public class GameScreen extends JPanel {
                 boardLayer.add(skillButton, 0);
 
                 int spotX = 135;
-                for (int j = 0; j < 4; j++) {
-                    int spotIndex = j;
+                for (int j = 0; j < kSkillSymbolCount; j++) {
                     JButton spotButton = createSpotButton();
-                    spotButton.setBounds(spotX, skillY, 25, 22);
-                    spotButton.addActionListener(e -> {
-                        SkillSlot slot = boardState.skills[skillIndex];
-                        if (!slot.locked && !slot.covered) {
-                            String[] possible = { "", "S", "H", "M", "B" };
-                            String current = slot.spots[spotIndex];
-                            if (current == null) {
-                                current = "";
-                            }
-
-                            int nextIdx = 0;
-                            for (int k = 0; k < possible.length; k++) {
-                                if (possible[k].equals(current)) {
-                                    nextIdx = (k + 1) % possible.length;
-                                    break;
-                                }
-                            }
-                            slot.spots[spotIndex] = possible[nextIdx];
-                            refreshBoardText();
-                        }
-                    });
+                    spotButton.setBounds(spotX, skillY, 24, 22);
                     skillSpotButtons[i][j] = spotButton;
                     boardLayer.add(spotButton, 0);
-                    spotX += 35;
+                    spotX += 30;
                 }
 
                 skillY += 38;
@@ -654,8 +774,8 @@ public class GameScreen extends JPanel {
             JButton button = new JButton();
             button.setMargin(new Insets(1, 2, 1, 2));
             button.setFont(new Font("Dialog", Font.BOLD, 10));
-//            button.setBackground(new Color(255, 248, 220));
-//            button.setFocusPainted(true);
+            // button.setBackground(new Color(255, 248, 220));
+            // button.setFocusPainted(true);
             button.setOpaque(false);
             button.setContentAreaFilled(false);
             button.setBorderPainted(false);
@@ -681,21 +801,21 @@ public class GameScreen extends JPanel {
                     button.setForeground(Color.WHITE);
                     for (JButton sb : skillSpotButtons[i])
                         sb.setVisible(false);
-                } else if (slot.covered) {
-                    button.setText("Covered");
-                    button.setBackground(new Color(120, 120, 120));
-                    button.setForeground(Color.WHITE);
-                    for (JButton sb : skillSpotButtons[i])
-                        sb.setVisible(false);
                 } else {
-                    button.setText(slot.name);
+                    if (slot.covered) {
+                        button.setText(slot.name + " (Used)");
+                        button.setForeground(new Color(90, 90, 90));
+                    } else {
+                        button.setText(slot.name);
+                        button.setForeground(Color.BLACK);
+                    }
                     button.setBackground(new Color(255, 248, 220));
-                    button.setForeground(Color.BLACK);
-                    for (int j = 0; j < 4; j++) {
+                    for (int j = 0; j < kSkillSymbolCount; j++) {
                         JButton sb = skillSpotButtons[i][j];
                         sb.setVisible(true);
-                        String val = slot.spots[j];
+                        String val = slot.requiredSymbols[j];
                         sb.setText((val == null || val.isEmpty()) ? "" : val);
+                        sb.setToolTipText(getSymbolDescription(val));
                     }
                 }
             }
@@ -730,7 +850,7 @@ public class GameScreen extends JPanel {
         private String name;
         private boolean covered;
         private boolean locked;
-        private final String[] spots = new String[4];
+        private final String[] requiredSymbols = new String[kSkillSymbolCount];
     }
 
     private static final class HeroStats {

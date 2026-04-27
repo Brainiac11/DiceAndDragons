@@ -1,7 +1,6 @@
 package src.skills;
 
 import java.util.List;
-
 import src.dice.DiceEnum;
 
 public abstract class Skill {
