@@ -14,10 +14,19 @@ public class GameMessage implements Serializable {
     public static final String BUY_ITEM = "BUY_ITEM";
     public static final String SELL_ITEM = "SELL_ITEM";
     public static final String SELECT_DRAGON = "SELECT_DRAGON";
+    public static final String DICE_ROLL = "DICE_ROLL";
+    public static final String DICE_PLACE = "DICE_PLACE";
+    public static final String DICE_REMOVE = "DICE_REMOVE";
+    public static final String SKILL_USED = "SKILL_USED";
 
     public String type;
     public String text;
     public LobbyState lobbyState;
+    public int dieIndex = -1;
+    public int skillIndex = -1;
+    public int symbolIndex = -1;
+    public int[] diceIndices;
+    public boolean skillUsed;
 
     public GameMessage(String type, String text) {
         this.type = type;
@@ -33,5 +42,23 @@ public class GameMessage implements Serializable {
         this.type = type;
         this.text = text;
         this.lobbyState = lobbyState;
+    }
+
+    public GameMessage(String type, int[] diceIndices) {
+        this.type = type;
+        this.diceIndices = diceIndices;
+    }
+
+    public GameMessage(String type, int dieIndex, int skillIndex, int symbolIndex) {
+        this.type = type;
+        this.dieIndex = dieIndex;
+        this.skillIndex = skillIndex;
+        this.symbolIndex = symbolIndex;
+    }
+
+    public GameMessage(String type, int skillIndex, boolean skillUsed) {
+        this.type = type;
+        this.skillIndex = skillIndex;
+        this.skillUsed = skillUsed;
     }
 }

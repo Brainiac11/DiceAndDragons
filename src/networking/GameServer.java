@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
+import src.dice.DiceEnum;
 import src.item.ItemEnum;
 import src.item.VillageMarketplaceCatalog;
 import src.players.DragonCatalog;
@@ -13,6 +15,15 @@ public class GameServer {
     private static final int kStartingGoldPerPlayer = 10;
     private static final int kMaxItemsPerPlayer = 2;
     private static final int kSkillSlotCount = 8;
+    private static final int kDiceCount = 5;
+    private static final int kSkillSymbolCount = 5;
+    private static final DiceEnum[] kEligibleDiceFaces = {
+            DiceEnum.SWORD,
+            DiceEnum.CROSSBOWS,
+            DiceEnum.DAGGGERS,
+            DiceEnum.SHIELD,
+            DiceEnum.DRAGON
+    };
 
     private final ServerSocket serverSocket;
     private final ArrayList<GameSubscriber> clients = new ArrayList<>();
@@ -22,12 +33,17 @@ public class GameServer {
     private int teamGold;
     private boolean gameStarted;
     private String selectedDragon;
+    private DiceEnum[] dicePool;
+    private int[] diceSkillIndex;
+    private int[] diceSymbolIndex;
+    private boolean[] usedSkills;
 
     public GameServer(String hostHandle) throws IOException {
         this.hostHandle = hostHandle.trim();
         serverSocket = new ServerSocket(0);
         players.add(new PlayerInfo(this.hostHandle));
         recalculateTeamGold();
+        resetDiceState();
     }
 
     public int getPort() {
@@ -46,7 +62,13 @@ public class GameServer {
             copyPlayers.add(cp);
         }
 
-        return new LobbyState(copyPlayers, new ArrayList<>(chatLog), allReady, teamGold, selectedDragon);
+        LobbyState state = new LobbyState(copyPlayers, new ArrayList<>(chatLog), allReady, teamGold, selectedDragon);
+        ensureDiceState();
+        state.dicePool = dicePool == null ? null : dicePool.clone();
+        state.diceSkillIndex = diceSkillIndex == null ? null : Arrays.copyOf(diceSkillIndex, diceSkillIndex.length);
+        state.diceSymbolIndex = diceSymbolIndex == null ? null : Arrays.copyOf(diceSymbolIndex, diceSymbolIndex.length);
+        state.usedSkills = usedSkills == null ? null : Arrays.copyOf(usedSkills, usedSkills.length);
+        return state;
     }
 
     public synchronized DragonCatalog.DragonProfile getSelectedDragonProfile() {
@@ -76,6 +98,162 @@ public class GameServer {
             return;
         }
         teamGold = players.size() * kStartingGoldPerPlayer;
+    }
+
+    private synchronized void resetDiceState() {
+        dicePool = new DiceEnum[kDiceCount];
+        diceSkillIndex = new int[kDiceCount];
+        diceSymbolIndex = new int[kDiceCount];
+        usedSkills = new boolean[kSkillSlotCount];
+        fillDicePool();
+        Arrays.fill(diceSkillIndex, -1);
+        Arrays.fill(diceSymbolIndex, -1);
+    }
+
+    private synchronized void ensureDiceState() {
+        if (dicePool == null || dicePool.length != kDiceCount) {
+            dicePool = new DiceEnum[kDiceCount];
+            fillDicePool();
+        } else {
+            for (int i = 0; i < kDiceCount; i++) {
+                if (dicePool[i] == null) {
+                    dicePool[i] = rollRandomDie();
+                }
+            }
+        }
+        if (diceSkillIndex == null || diceSkillIndex.length != kDiceCount) {
+            diceSkillIndex = new int[kDiceCount];
+            Arrays.fill(diceSkillIndex, -1);
+        }
+        if (diceSymbolIndex == null || diceSymbolIndex.length != kDiceCount) {
+            diceSymbolIndex = new int[kDiceCount];
+            Arrays.fill(diceSymbolIndex, -1);
+        }
+        if (usedSkills == null || usedSkills.length != kSkillSlotCount) {
+            usedSkills = new boolean[kSkillSlotCount];
+        }
+    }
+
+    private void fillDicePool() {
+        for (int i = 0; i < kDiceCount; i++) {
+            dicePool[i] = rollRandomDie();
+        }
+    }
+
+    private DiceEnum rollRandomDie() {
+        return kEligibleDiceFaces[(int) (Math.random() * kEligibleDiceFaces.length)];
+    }
+
+    private synchronized void rollDice(int[] indices) {
+        ensureDiceState();
+        if (indices == null || indices.length == 0) {
+            for (int i = 0; i < kDiceCount; i++) {
+                if (diceSkillIndex[i] == -1) {
+                    dicePool[i] = rollRandomDie();
+                }
+            }
+            return;
+        }
+
+        for (int index : indices) {
+            if (index < 0 || index >= kDiceCount) {
+                continue;
+            }
+            if (diceSkillIndex[index] != -1) {
+                continue;
+            }
+            dicePool[index] = rollRandomDie();
+        }
+    }
+
+    private synchronized void placeDie(int dieIndex, int skillIndex, int symbolIndex) {
+        ensureDiceState();
+        if (dieIndex < 0 || dieIndex >= kDiceCount) {
+            return;
+        }
+        if (skillIndex < 0 || skillIndex >= kSkillSlotCount) {
+            return;
+        }
+        if (symbolIndex < 0 || symbolIndex >= kSkillSymbolCount) {
+            return;
+        }
+
+        int existing = findDieAt(skillIndex, symbolIndex);
+        if (existing != -1 && existing != dieIndex) {
+            return;
+        }
+
+        diceSkillIndex[dieIndex] = skillIndex;
+        diceSymbolIndex[dieIndex] = symbolIndex;
+    }
+
+    private synchronized void removeDie(int dieIndex) {
+        ensureDiceState();
+        if (dieIndex < 0 || dieIndex >= kDiceCount) {
+            return;
+        }
+        diceSkillIndex[dieIndex] = -1;
+        diceSymbolIndex[dieIndex] = -1;
+    }
+
+    private synchronized int findDieAt(int skillIndex, int symbolIndex) {
+        if (diceSkillIndex == null || diceSymbolIndex == null) {
+            return -1;
+        }
+        for (int i = 0; i < kDiceCount; i++) {
+            if (diceSkillIndex[i] == skillIndex && diceSymbolIndex[i] == symbolIndex) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private synchronized void setSkillUsed(int skillIndex, boolean used) {
+        ensureDiceState();
+        if (skillIndex < 0 || skillIndex >= kSkillSlotCount) {
+            return;
+        }
+        usedSkills[skillIndex] = used;
+    }
+
+    private synchronized boolean isPrimaryHandle(String handle) {
+        if (handle == null || players.isEmpty()) {
+            return false;
+        }
+        PlayerInfo primary = players.get(0);
+        return primary != null && primary.handle != null && primary.handle.equalsIgnoreCase(handle.trim());
+    }
+
+    public synchronized void applyGameAction(GameMessage message, String handle) {
+        if (message == null) {
+            return;
+        }
+        if (!isPrimaryHandle(handle)) {
+            return;
+        }
+
+        if (GameMessage.DICE_ROLL.equals(message.type)) {
+            rollDice(message.diceIndices);
+            broadcastLobbyState();
+            return;
+        }
+
+        if (GameMessage.DICE_PLACE.equals(message.type)) {
+            placeDie(message.dieIndex, message.skillIndex, message.symbolIndex);
+            broadcastLobbyState();
+            return;
+        }
+
+        if (GameMessage.DICE_REMOVE.equals(message.type)) {
+            removeDie(message.dieIndex);
+            broadcastLobbyState();
+            return;
+        }
+
+        if (GameMessage.SKILL_USED.equals(message.type)) {
+            setSkillUsed(message.skillIndex, message.skillUsed);
+            broadcastLobbyState();
+        }
     }
 
     public synchronized void setHostHero(String hero) {
@@ -201,6 +379,7 @@ public class GameServer {
             return;
         }
         gameStarted = true;
+        resetDiceState();
         chatLog.add("*****Host Started the Game*****");
         LobbyState startedState = getCurrentLobbyState();
         sendGameMessage(new GameMessage(GameMessage.START, "Game started", startedState));
@@ -310,6 +489,11 @@ public class GameServer {
                         }
                         broadcastLobbyState();
                     }
+                } else if (GameMessage.DICE_ROLL.equals(in.type)
+                        || GameMessage.DICE_PLACE.equals(in.type)
+                        || GameMessage.DICE_REMOVE.equals(in.type)
+                        || GameMessage.SKILL_USED.equals(in.type)) {
+                    applyGameAction(in, handle);
                 }
             }
         } catch (Exception e) {

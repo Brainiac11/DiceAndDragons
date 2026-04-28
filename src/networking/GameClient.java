@@ -80,6 +80,34 @@ public class GameClient {
         out.flush();
     }
 
+    public void rollDice(int[] diceIndices) throws IOException {
+        out.writeObject(new GameMessage(GameMessage.DICE_ROLL, diceIndices));
+        out.flush();
+    }
+
+    public void placeDie(int dieIndex, int skillIndex, int symbolIndex) throws IOException {
+        out.writeObject(new GameMessage(GameMessage.DICE_PLACE, dieIndex, skillIndex, symbolIndex));
+        out.flush();
+    }
+
+    public void removeDie(int dieIndex) throws IOException {
+        out.writeObject(new GameMessage(GameMessage.DICE_REMOVE, dieIndex, -1, -1));
+        out.flush();
+    }
+
+    public void setSkillUsed(int skillIndex, boolean skillUsed) throws IOException {
+        out.writeObject(new GameMessage(GameMessage.SKILL_USED, skillIndex, skillUsed));
+        out.flush();
+    }
+
+    public void sendGameAction(GameMessage message) throws IOException {
+        if (message == null) {
+            return;
+        }
+        out.writeObject(message);
+        out.flush();
+    }
+
     public void close() {
         try {
             if (socket != null) {

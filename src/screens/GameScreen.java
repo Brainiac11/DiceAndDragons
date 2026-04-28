@@ -5,9 +5,12 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Insets;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -26,8 +29,10 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import src.dice.DiceEnum;
 import src.item.ItemEnum;
 import src.item.VillageMarketplaceCatalog;
+import src.networking.GameMessage;
 import src.networking.LobbyState;
 import src.networking.PlayerInfo;
 import src.players.DragonCatalog;
@@ -39,6 +44,7 @@ public class GameScreen extends JPanel {
     private static final int kItemSlotCount = 2;
     private static final int kSkillSlotCount = 8;
     private static final int kSkillSymbolCount = 5;
+    private static final int kDiceCount = 5;
     private static final int kStartingLevel = 1;
     private static final int kDefaultXp = 0;
     private static final String kBoardBakupPath = "imgs/blank_sheet.png";
@@ -55,26 +61,57 @@ public class GameScreen extends JPanel {
     private static final Map<String, String[]> kSkillToRequiredSymbols = createSkillToRequiredSymbolsMap();
     private static final Map<String, HeroStats> kHeroToStats = createHeroToStatsMap();
 
+    private static final Map<DiceEnum, String> kDiceImagePaths = createDiceImagePathMap();
+    private final Map<DiceEnum, ImageIcon> diceImageCache = new HashMap<>();
+
     private JPanel boardsPanel;
     private JTextArea chatArea;
     private JTextField chatInput;
     private Consumer<String> chatSender;
+    private Consumer<GameMessage> gameActionSender;
     private JLabel dragonInfoLabel;
     private JLabel marketInfoLabel;
     private JLabel teamGoldInfoLabel;
 
+    private JPanel dicePanel;
+    private JButton[] diceButtons;
+    private JButton rollButton;
+    private JButton clearSelectionButton;
+
+    private String localHandle;
+    private String primaryHandle;
+    private boolean canControlDice;
+    private boolean[] localDiceSelection;
+    private int activeDieIndex;
+    private DiceEnum[] dicePool;
+    private int[] diceSkillIndex;
+    private int[] diceSymbolIndex;
+    private boolean[] usedSkills;
+    private PlayerBoardPanel primaryBoardPanel;
+
     private Map<String, BoardState> boardStateByPlayer;
     private Map<String, ImageIcon> boardIconCache;
+    private final Map<String, ImageIcon> symbolIconCache;
 
     public GameScreen() {
-        this(null, null, null);
+        this(null, null, null, null);
     }
 
-    // bs'd all the values for ts
     public GameScreen(LobbyState lobbyState, String localHandle, Consumer<String> chatSender) {
+        this(lobbyState, localHandle, chatSender, null);
+    }
+
+    public GameScreen(LobbyState lobbyState, String localHandle, Consumer<String> chatSender,
+            Consumer<GameMessage> gameActionSender) {
         this.chatSender = chatSender;
+        this.gameActionSender = gameActionSender;
+        this.localHandle = localHandle;
         this.boardStateByPlayer = new LinkedHashMap<>();
         this.boardIconCache = new HashMap<>();
+        this.symbolIconCache = new HashMap<>();
+        this.localDiceSelection = new boolean[kDiceCount];
+        this.activeDieIndex = -1;
+        initializeLocalDiceState();
 
         setLayout(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
@@ -82,7 +119,13 @@ public class GameScreen extends JPanel {
         boardsPanel = new JPanel(new GridLayout(0, 2, 10, 10));
         JScrollPane boardScrollPane = new JScrollPane(boardsPanel);
         boardScrollPane.getVerticalScrollBar().setUnitIncrement(16);
-        add(boardScrollPane, BorderLayout.CENTER);
+
+        JPanel centerWrapper = new JPanel(new BorderLayout(6, 6));
+        JPanel dicePanelInstance = buildDicePanel();
+        centerWrapper.add(dicePanelInstance, BorderLayout.NORTH);
+        centerWrapper.add(boardScrollPane, BorderLayout.CENTER);
+        add(centerWrapper, BorderLayout.CENTER);
+        dicePanel = dicePanelInstance;
 
         JPanel sidePanel = new JPanel(new BorderLayout(8, 8));
         sidePanel.setPreferredSize(new Dimension(360, 10));
@@ -118,6 +161,8 @@ public class GameScreen extends JPanel {
 
         sidePanel.add(chatPanel, BorderLayout.CENTER);
 
+        dicePanel = null;
+
         add(sidePanel, BorderLayout.EAST);
 
         rebuildBoards(lobbyState, localHandle);
@@ -126,9 +171,610 @@ public class GameScreen extends JPanel {
     }
 
     public void updateFromLobbyState(LobbyState lobbyState) {
-        rebuildBoards(lobbyState, null);
+        rebuildBoards(lobbyState, localHandle);
         refreshEncounterInfo(lobbyState);
         refreshChat(lobbyState);
+    }
+
+    private void initializeLocalDiceState() {
+        dicePool = new DiceEnum[kDiceCount];
+        for (int i = 0; i < kDiceCount; i++) {
+            dicePool[i] = DiceEnum.SWORD;
+        }
+        diceSkillIndex = new int[kDiceCount];
+        diceSymbolIndex = new int[kDiceCount];
+        usedSkills = new boolean[kSkillSlotCount];
+        for (int i = 0; i < kDiceCount; i++) {
+            diceSkillIndex[i] = -1;
+            diceSymbolIndex[i] = -1;
+        }
+    }
+
+    private JPanel buildDicePanel() {
+        JPanel panel = new JPanel(new BorderLayout(6, 6));
+        panel.setBorder(BorderFactory.createTitledBorder("Dice"));
+
+        JPanel diceRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        diceButtons = new JButton[kDiceCount];
+        for (int i = 0; i < kDiceCount; i++) {
+            final int dieIndex = i;
+            JButton button = new JButton();
+            button.setPreferredSize(new Dimension(46, 40));
+            button.setFont(new Font("Dialog", Font.BOLD, 12));
+            button.setOpaque(true);
+            button.setIcon(createDiceIcon(dicePool == null ? null : dicePool[i]));
+            button.setText("");
+            button.addActionListener(e -> handleDiceButtonClick(dieIndex));
+            button.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2 && canControlDice && !isDiePlaced(dieIndex)
+                            && gameActionSender != null) {
+                        System.out.println("DIe Index; " + dieIndex);
+                        gameActionSender.accept(new GameMessage(GameMessage.DICE_ROLL, new int[] { dieIndex }));
+                    }
+                }
+            });
+            diceButtons[i] = button;
+            diceRow.add(button);
+        }
+
+        rollButton = new JButton("Roll Selected");
+        rollButton.addActionListener(e -> rollSelectedDice());
+
+        clearSelectionButton = new JButton("Clear Selection");
+        clearSelectionButton.addActionListener(e -> clearDiceSelection());
+
+        JPanel diceControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        diceControls.add(rollButton);
+        diceControls.add(clearSelectionButton);
+
+        panel.add(diceRow, BorderLayout.CENTER);
+        panel.add(diceControls, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    private void updateDiceStateFromLobby(LobbyState lobbyState) {
+        DiceEnum[] incomingPool = lobbyState == null ? null : lobbyState.dicePool;
+        int[] incomingSkillIndex = lobbyState == null ? null : lobbyState.diceSkillIndex;
+        int[] incomingSymbolIndex = lobbyState == null ? null : lobbyState.diceSymbolIndex;
+        boolean[] incomingUsedSkills = lobbyState == null ? null : lobbyState.usedSkills;
+
+        dicePool = normalizeDicePool(incomingPool);
+        diceSkillIndex = normalizeIntArray(incomingSkillIndex, kDiceCount, -1);
+        diceSymbolIndex = normalizeIntArray(incomingSymbolIndex, kDiceCount, -1);
+        usedSkills = normalizeBooleanArray(incomingUsedSkills, kSkillSlotCount);
+        syncLocalDiceSelection();
+    }
+
+    private DiceEnum[] normalizeDicePool(DiceEnum[] pool) {
+        DiceEnum[] normalized = new DiceEnum[kDiceCount];
+        if (pool != null) {
+            for (int i = 0; i < Math.min(pool.length, kDiceCount); i++) {
+                normalized[i] = isEligibleDieFace(pool[i]) ? pool[i] : DiceEnum.SWORD;
+            }
+        }
+        for (int i = 0; i < kDiceCount; i++) {
+            if (normalized[i] == null) {
+                normalized[i] = DiceEnum.SWORD;
+            }
+        }
+        return normalized;
+    }
+
+    private int[] normalizeIntArray(int[] values, int size, int defaultValue) {
+        int[] normalized = new int[size];
+        for (int i = 0; i < size; i++) {
+            normalized[i] = defaultValue;
+        }
+        if (values != null) {
+            System.arraycopy(values, 0, normalized, 0, Math.min(values.length, size));
+        }
+        return normalized;
+    }
+
+    private boolean[] normalizeBooleanArray(boolean[] values, int size) {
+        boolean[] normalized = new boolean[size];
+        if (values != null) {
+            System.arraycopy(values, 0, normalized, 0, Math.min(values.length, size));
+        }
+        return normalized;
+    }
+
+    private void syncLocalDiceSelection() {
+        if (localDiceSelection == null || localDiceSelection.length != kDiceCount) {
+            localDiceSelection = new boolean[kDiceCount];
+        }
+        int nextActive = -1;
+        for (int i = 0; i < kDiceCount; i++) {
+            if (localDiceSelection[i] && !isDiePlaced(i)) {
+                nextActive = i;
+            } else {
+                localDiceSelection[i] = false;
+            }
+        }
+        activeDieIndex = nextActive;
+    }
+
+    private void refreshDicePanel() {
+        if (diceButtons == null) {
+            return;
+        }
+
+        if (!canControlDice && localDiceSelection != null) {
+            for (int i = 0; i < localDiceSelection.length; i++) {
+                localDiceSelection[i] = false;
+            }
+            activeDieIndex = -1;
+        }
+
+        for (int i = 0; i < diceButtons.length; i++) {
+            JButton button = diceButtons[i];
+            DiceEnum value = dicePool == null ? null : dicePool[i];
+            boolean placed = isDiePlaced(i);
+            button.setIcon(createDiceIcon(value));
+            button.setEnabled(canControlDice && !placed);
+            if (localDiceSelection != null && localDiceSelection[i]) {
+                button.setBackground(new Color(210, 230, 255));
+            } else if (placed) {
+                button.setBackground(new Color(200, 220, 200));
+            } else {
+                button.setBackground(new Color(245, 245, 245));
+            }
+        }
+
+        if (rollButton != null) {
+            rollButton.setEnabled(canControlDice);
+        }
+        if (clearSelectionButton != null) {
+            clearSelectionButton.setEnabled(canControlDice);
+        }
+    }
+
+    private ImageIcon createDiceIcon(DiceEnum value) {
+        if (value == null) {
+            value = DiceEnum.SWORD;
+        }
+        int w = 36;
+        int h = 36;
+        ImageIcon cached = diceImageCache.get(value);
+        if (cached != null) {
+            return cached;
+        }
+
+        ImageIcon imgIcon = getDiceImageIcon(value, w, h);
+        if (imgIcon != null) {
+            diceImageCache.put(value, imgIcon);
+            return imgIcon;
+        }
+
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        try {
+            g.setColor(new Color(250, 250, 250));
+            g.fillRoundRect(0, 0, w, h, 8, 8);
+            g.setColor(new Color(160, 160, 160));
+            g.drawRoundRect(0, 0, w - 1, h - 1, 8, 8);
+            BufferedImage face = loadScaledFaceImage(value, 22, 22);
+            if (face != null) {
+                int x = (w - face.getWidth()) / 2;
+                int y = (h - face.getHeight()) / 2;
+                g.drawImage(face, x, y, null);
+            }
+        } finally {
+            g.dispose();
+        }
+        ImageIcon fallback = new ImageIcon(img);
+        diceImageCache.put(value, fallback);
+        return fallback;
+    }
+
+    private ImageIcon getDiceImageIcon(DiceEnum value, int w, int h) {
+        if (value == null)
+            return null;
+        String path = kDiceImagePaths.get(value);
+        if (path == null)
+            return null;
+        File f = new File(path);
+        if (!f.exists())
+            return null;
+
+        BufferedImage tmp = loadScaledFaceImage(value, w - 8, h - 8);
+        if (tmp == null)
+            return null;
+
+        BufferedImage canvas = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = canvas.createGraphics();
+        try {
+            g.setColor(new Color(250, 250, 250));
+            g.fillRoundRect(0, 0, w, h, 8, 8);
+            g.setColor(new Color(160, 160, 160));
+            g.drawRoundRect(0, 0, w - 1, h - 1, 8, 8);
+
+            int x = (w - tmp.getWidth()) / 2;
+            int y = (h - tmp.getHeight()) / 2;
+            g.drawImage(tmp, x, y, null);
+        } finally {
+            g.dispose();
+        }
+
+        return new ImageIcon(canvas);
+    }
+
+    private BufferedImage loadScaledFaceImage(DiceEnum value, int maxWidth, int maxHeight) {
+        if (value == null) {
+            return null;
+        }
+        String path = kDiceImagePaths.get(value);
+        if (path == null) {
+            return null;
+        }
+
+        File file = new File(path);
+        if (!file.exists()) {
+            return null;
+        }
+
+        try {
+            BufferedImage source = ImageIO.read(file);
+            if (source == null) {
+                return null;
+            }
+
+            double scale = Math.min((double) maxWidth / source.getWidth(), (double) maxHeight / source.getHeight());
+            if (scale <= 0) {
+                scale = 1.0;
+            }
+            int width = Math.max(1, (int) Math.round(source.getWidth() * scale));
+            int height = Math.max(1, (int) Math.round(source.getHeight() * scale));
+
+            BufferedImage scaled = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = scaled.createGraphics();
+            try {
+                g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                        java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g.drawImage(source.getScaledInstance(width, height, Image.SCALE_SMOOTH), 0, 0, null);
+            } finally {
+                g.dispose();
+            }
+            return scaled;
+        } catch (IOException ex) {
+            return null;
+        }
+    }
+
+    private ImageIcon getSymbolIcon(String symbol) {
+        if (symbol == null || symbol.isBlank() || kSkillSymbolMatch.equals(symbol)
+                || kSkillSymbolDifferent.equals(symbol)) {
+            return null;
+        }
+
+        ImageIcon cached = symbolIconCache.get(symbol);
+        if (cached != null) {
+            return cached;
+        }
+
+        DiceEnum face = getFaceForSymbol(symbol);
+        if (face == null) {
+            return null;
+        }
+
+        BufferedImage scaled = loadScaledFaceImage(face, 16, 16);
+        if (scaled == null) {
+            return null;
+        }
+
+        ImageIcon icon = new ImageIcon(scaled);
+        symbolIconCache.put(symbol, icon);
+        return icon;
+    }
+
+    private DiceEnum getFaceForSymbol(String symbol) {
+        if (kSkillSymbolSword.equals(symbol)) {
+            return DiceEnum.SWORD;
+        }
+        if (kSkillSymbolMagic.equals(symbol)) {
+            return DiceEnum.MAGIC;
+        }
+        if (kSkillSymbolCrossbow.equals(symbol)) {
+            return DiceEnum.CROSSBOWS;
+        }
+        if (kSkillSymbolDagger.equals(symbol)) {
+            return DiceEnum.DAGGGERS;
+        }
+        if (kSkillSymbolHammer.equals(symbol)) {
+            return DiceEnum.SHIELD;
+        }
+        return null;
+    }
+
+    private void handleDiceButtonClick(int dieIndex) {
+        if (!canControlDice || dieIndex < 0 || dieIndex >= kDiceCount) {
+            return;
+        }
+        if (isDiePlaced(dieIndex)) {
+            return;
+        }
+
+        localDiceSelection[dieIndex] = !localDiceSelection[dieIndex];
+        if (localDiceSelection[dieIndex]) {
+            activeDieIndex = dieIndex;
+        } else if (activeDieIndex == dieIndex) {
+            activeDieIndex = -1;
+        }
+        refreshDicePanel();
+    }
+
+    private void clearDiceSelection() {
+        for (int i = 0; i < localDiceSelection.length; i++) {
+            localDiceSelection[i] = false;
+        }
+        activeDieIndex = -1;
+        refreshDicePanel();
+    }
+
+    // allah
+    private void rollSelectedDice() {
+        if (!canControlDice || gameActionSender == null) {
+            return;
+        }
+
+        // if ( gameActionSender == null) {
+        // return;
+        // }
+
+        int selectedCount = 0;
+        for (int i = 0; i < kDiceCount; i++) {
+            if (localDiceSelection[i] && !isDiePlaced(i)) {
+                selectedCount++;
+            }
+        }
+
+        // i think this shoud fix it
+
+        if (selectedCount == 0) {
+            selectedCount = kDiceCount; // i think having this might let me roll all them at once
+        }
+
+        int[] indices = null;
+        if (selectedCount > 0) {
+            indices = new int[selectedCount];
+            int index = 0;
+            for (int i = 0; i < kDiceCount; i++) {
+                if (localDiceSelection[i] && (!isDiePlaced(i) || selectedCount == kDiceCount)) {
+                    indices[index] = i;
+                    index++;
+                }
+            }
+        }
+
+        gameActionSender.accept(new GameMessage(GameMessage.DICE_ROLL, indices));
+        clearDiceSelection();
+    }
+
+    private void handleSkillSpotClick(BoardState boardState, int skillIndex, int symbolIndex) {
+        if (!canControlDice || gameActionSender == null || boardState == null || !boardState.isPrimary) {
+            return;
+        }
+        if (boardState.skills == null || skillIndex < 0 || skillIndex >= boardState.skills.length) {
+            return;
+        }
+
+        SkillSlot slot = boardState.skills[skillIndex];
+        if (slot.locked) {
+            return;
+        }
+
+        int existingDie = findDieIndexAt(skillIndex, symbolIndex);
+        if (existingDie != -1) {
+            gameActionSender.accept(new GameMessage(GameMessage.DICE_REMOVE, existingDie, -1, -1));
+            diceSkillIndex[existingDie] = -1;
+            diceSymbolIndex[existingDie] = -1;
+            clearDiceSelection();
+            if (primaryBoardPanel != null) {
+                primaryBoardPanel.refreshBoardText();
+            }
+            return;
+        }
+
+        if (activeDieIndex < 0 || activeDieIndex >= kDiceCount) {
+            return;
+        }
+        if (isDiePlaced(activeDieIndex)) {
+            return;
+        }
+        DiceEnum dieValue = dicePool == null ? null : dicePool[activeDieIndex];
+        if (!canPlaceDie(boardState, skillIndex, symbolIndex, dieValue)) {
+            return;
+        }
+
+        gameActionSender.accept(new GameMessage(GameMessage.DICE_PLACE, activeDieIndex, skillIndex, symbolIndex));
+        diceSkillIndex[activeDieIndex] = skillIndex;
+        diceSymbolIndex[activeDieIndex] = symbolIndex;
+        clearDiceSelection();
+        if (primaryBoardPanel != null) {
+            primaryBoardPanel.refreshBoardText();
+        }
+    }
+
+    private void toggleSkillUsed(BoardState boardState, int skillIndex) {
+        if (!canControlDice || gameActionSender == null || boardState == null || !boardState.isPrimary) {
+            return;
+        }
+        if (usedSkills == null || skillIndex < 0 || skillIndex >= usedSkills.length) {
+            return;
+        }
+
+        boolean next = !usedSkills[skillIndex];
+        gameActionSender.accept(new GameMessage(GameMessage.SKILL_USED, skillIndex, next));
+        setSkillUsedLocal(boardState, skillIndex, next);
+    }
+
+    private void setSkillUsedLocal(BoardState boardState, int skillIndex, boolean used) {
+        if (usedSkills == null || skillIndex < 0 || skillIndex >= usedSkills.length) {
+            return;
+        }
+        usedSkills[skillIndex] = used;
+        if (boardState != null && boardState.skills != null && skillIndex < boardState.skills.length) {
+            SkillSlot slot = boardState.skills[skillIndex];
+            if (slot != null && !slot.locked) {
+                slot.covered = used;
+            }
+        }
+        if (primaryBoardPanel != null) {
+            primaryBoardPanel.refreshBoardText();
+        }
+    }
+
+    private void applyUsedSkillsToBoard(BoardState state) {
+        if (state == null || state.skills == null || usedSkills == null) {
+            return;
+        }
+        for (int i = 0; i < state.skills.length && i < usedSkills.length; i++) {
+            SkillSlot slot = state.skills[i];
+            if (slot != null && !slot.locked) {
+                slot.covered = usedSkills[i];
+            }
+        }
+    }
+
+    private boolean isDiePlaced(int dieIndex) {
+        if (diceSkillIndex == null || diceSymbolIndex == null) {
+            return false;
+        }
+        if (dieIndex < 0 || dieIndex >= diceSkillIndex.length) {
+            return false;
+        }
+        return diceSkillIndex[dieIndex] >= 0 && diceSymbolIndex[dieIndex] >= 0;
+    }
+
+    private int findDieIndexAt(int skillIndex, int symbolIndex) {
+        if (diceSkillIndex == null || diceSymbolIndex == null) {
+            return -1;
+        }
+        for (int i = 0; i < kDiceCount; i++) {
+            if (diceSkillIndex[i] == skillIndex && diceSymbolIndex[i] == symbolIndex) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private DiceEnum getPlacedDie(int skillIndex, int symbolIndex) {
+        int dieIndex = findDieIndexAt(skillIndex, symbolIndex);
+        if (dieIndex == -1 || dicePool == null || dieIndex >= dicePool.length) {
+            return null;
+        }
+        return dicePool[dieIndex];
+    }
+
+    private String getDieLabel(DiceEnum value) {
+        if (value == null) {
+            return kSkillSymbolSword;
+        }
+        if (value == DiceEnum.SWORD) {
+            return kSkillSymbolSword;
+        }
+        if (value == DiceEnum.MAGIC) {
+            return kSkillSymbolMagic;
+        }
+        if (value == DiceEnum.CROSSBOWS) {
+            return kSkillSymbolCrossbow;
+        }
+        if (value == DiceEnum.DAGGGERS) {
+            return kSkillSymbolDagger;
+        }
+        if (value == DiceEnum.SHIELD) {
+            return kSkillSymbolHammer;
+        }
+        if (value == DiceEnum.DRAGON) {
+            return "DR";
+        }
+        return "?";
+    }
+
+    private String getDieSkillSymbol(DiceEnum value) {
+        if (value == null) {
+            return null;
+        }
+        if (value == DiceEnum.SWORD) {
+            return kSkillSymbolSword;
+        }
+        if (value == DiceEnum.MAGIC) {
+            return kSkillSymbolMagic;
+        }
+        if (value == DiceEnum.CROSSBOWS) {
+            return kSkillSymbolCrossbow;
+        }
+        if (value == DiceEnum.DAGGGERS) {
+            return kSkillSymbolDagger;
+        }
+        if (value == DiceEnum.SHIELD) {
+            return kSkillSymbolHammer;
+        }
+        return null;
+    }
+
+    private boolean canPlaceDie(BoardState boardState, int skillIndex, int symbolIndex, DiceEnum dieValue) {
+        if (boardState == null || boardState.skills == null) {
+            return false;
+        }
+        if (skillIndex < 0 || skillIndex >= boardState.skills.length) {
+            return false;
+        }
+        SkillSlot slot = boardState.skills[skillIndex];
+        if (slot == null || slot.locked) {
+            return false;
+        }
+        if (symbolIndex < 0 || symbolIndex >= slot.requiredSymbols.length) {
+            return false;
+        }
+
+        String required = slot.requiredSymbols[symbolIndex];
+        if (required == null || required.isEmpty()) {
+            return false;
+        }
+
+        String dieSymbol = getDieSkillSymbol(dieValue);
+        if (dieSymbol == null) {
+            return false;
+        }
+
+        if (required.equals(kSkillSymbolMatch)) {
+            for (int i = 0; i < slot.requiredSymbols.length; i++) {
+                if (!kSkillSymbolMatch.equals(slot.requiredSymbols[i])) {
+                    continue;
+                }
+                DiceEnum placed = getPlacedDie(skillIndex, i);
+                if (placed == null) {
+                    continue;
+                }
+                String placedSymbol = getDieSkillSymbol(placed);
+                if (placedSymbol != null && !placedSymbol.equals(dieSymbol)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if (required.equals(kSkillSymbolDifferent)) {
+            for (int i = 0; i < slot.requiredSymbols.length; i++) {
+                if (!kSkillSymbolDifferent.equals(slot.requiredSymbols[i])) {
+                    continue;
+                }
+                DiceEnum placed = getPlacedDie(skillIndex, i);
+                if (placed == null) {
+                    continue;
+                }
+                String placedSymbol = getDieSkillSymbol(placed);
+                if (placedSymbol != null && placedSymbol.equals(dieSymbol)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        return required.equals(dieSymbol);
     }
 
     private void refreshEncounterInfo(LobbyState lobbyState) {
@@ -193,6 +839,10 @@ public class GameScreen extends JPanel {
 
     private void rebuildBoards(LobbyState lobbyState, String localHandle) {
         boardsPanel.removeAll();
+        if (localHandle != null) {
+            this.localHandle = localHandle;
+        }
+        updateDiceStateFromLobby(lobbyState);
         String selectedDragon = lobbyState == null ? null : lobbyState.selectedDragon;
         int teamGold = lobbyState == null ? 0 : Math.max(0, lobbyState.teamGold);
 
@@ -202,14 +852,31 @@ public class GameScreen extends JPanel {
         }
 
         LinkedHashMap<String, BoardState> nextBoardStateMap = new LinkedHashMap<>();
+        primaryBoardPanel = null;
+        primaryHandle = null;
+        if (!players.isEmpty()) {
+            PlayerInfo primaryPlayer = players.get(0);
+            primaryHandle = cleanHandle(primaryPlayer == null ? null : primaryPlayer.handle, 0);
+        } else if (localHandle != null && !localHandle.isBlank()) {
+            primaryHandle = cleanHandle(localHandle, 0);
+        }
+        canControlDice = localHandle != null
+                && primaryHandle != null
+                && !localHandle.isBlank()
+                && localHandle.equalsIgnoreCase(primaryHandle)
+                && gameActionSender != null;
 
         if (players.isEmpty()) {
             PlayerInfo fallbackPlayer = new PlayerInfo(
                     localHandle == null || localHandle.isBlank() ? "Player" : localHandle);
             fallbackPlayer.hero = Heroes.WARRIOR;
             BoardState state = buildBoardState(fallbackPlayer, 0, selectedDragon, teamGold);
+            state.isPrimary = true;
+            applyUsedSkillsToBoard(state);
             nextBoardStateMap.put(state.handle, state);
-            boardsPanel.add(new PlayerBoardPanel(state));
+            PlayerBoardPanel panel = new PlayerBoardPanel(state);
+            primaryBoardPanel = panel;
+            boardsPanel.add(panel);
         } else {
             int index = 0;
             for (PlayerInfo player : players) {
@@ -235,8 +902,17 @@ public class GameScreen extends JPanel {
                     updateBoardFromPurchases(boardState, selectedDragon, player.purchasedItems);
                 }
 
+                boardState.isPrimary = index == 0;
+                if (boardState.isPrimary) {
+                    applyUsedSkillsToBoard(boardState);
+                }
+
                 nextBoardStateMap.put(handle, boardState);
-                boardsPanel.add(new PlayerBoardPanel(boardState));
+                PlayerBoardPanel panel = new PlayerBoardPanel(boardState);
+                if (boardState.isPrimary) {
+                    primaryBoardPanel = panel;
+                }
+                boardsPanel.add(panel);
                 index++;
             }
         }
@@ -246,6 +922,7 @@ public class GameScreen extends JPanel {
 
         boardsPanel.revalidate();
         boardsPanel.repaint();
+        refreshDicePanel();
     }
 
     private BoardState buildBoardState(PlayerInfo player, int index, String selectedDragon, int teamGold) {
@@ -462,7 +1139,7 @@ public class GameScreen extends JPanel {
             return "Rogue symbol (Daggers)";
         }
         if (symbol.equals(kSkillSymbolHammer)) {
-            return "Cleric symbol (Hammer)";
+            return "Shield symbol";
         }
         if (symbol.equals(kSkillSymbolMatch)) {
             return "Must match the other '=' symbols";
@@ -555,21 +1232,6 @@ public class GameScreen extends JPanel {
 
         map.put(Heroes.ROGUE,
                 new String[] { "Sneak Attack", "Deflect", "Stab", "Flanking Blow", "Sudden Death", "Poison Tip" });
-
-        // map.put(Heroes.WARRIOR,
-        // new String[] {});
-        //
-        // map.put(Heroes.WIZARD,
-        // new String[] {});
-        //
-        // map.put(Heroes.CLERIC,
-        // new String[] {});
-        //
-        // map.put(Heroes.RANGER,
-        // new String[] {});
-        //
-        // map.put(Heroes.ROGUE,
-        // new String[] {});
 
         return map;
     }
@@ -669,6 +1331,24 @@ public class GameScreen extends JPanel {
         return map;
     }
 
+    private static Map<DiceEnum, String> createDiceImagePathMap() {
+        Map<DiceEnum, String> map = new HashMap<>();
+        map.put(DiceEnum.SWORD, "imgs/sword.png");
+        map.put(DiceEnum.CROSSBOWS, "imgs/crossbow.png");
+        map.put(DiceEnum.DAGGGERS, "imgs/dagger.png");
+        map.put(DiceEnum.DRAGON, "imgs/dragon.png");
+        map.put(DiceEnum.SHIELD, "imgs/magic.png");
+        return map;
+    }
+
+    private boolean isEligibleDieFace(DiceEnum value) {
+        return value == DiceEnum.SWORD
+                || value == DiceEnum.CROSSBOWS
+                || value == DiceEnum.DAGGGERS
+                || value == DiceEnum.SHIELD
+                || value == DiceEnum.DRAGON;
+    }
+
     private class PlayerBoardPanel extends JPanel {
         private BoardState boardState;
 
@@ -728,22 +1408,23 @@ public class GameScreen extends JPanel {
             for (int i = 0; i < kSkillSlotCount; i++) {
                 final int skillIndex = i;
                 JButton skillButton = createSpotButton();
-                skillButton.setBounds(15, skillY, 115-28, 22);
+                skillButton.setBounds(15, skillY, 115 - 28, 22);
                 skillButton.addActionListener(e -> {
                     SkillSlot slot = boardState.skills[skillIndex];
                     if (slot.locked) {
                         return;
                     }
-                    slot.covered = !slot.covered;
-                    refreshBoardText();
+                    toggleSkillUsed(boardState, skillIndex);
                 });
                 skillButtons[i] = skillButton;
                 boardLayer.add(skillButton, 0);
 
-                int spotX = 135-29;
+                int spotX = 135 - 29;
                 for (int j = 0; j < kSkillSymbolCount; j++) {
                     JButton spotButton = createSpotButton();
                     spotButton.setBounds(spotX, skillY, 24, 22);
+                    final int symbolIndex = j;
+                    spotButton.addActionListener(e -> handleSkillSpotClick(boardState, skillIndex, symbolIndex));
                     skillSpotButtons[i][j] = spotButton;
                     boardLayer.add(spotButton, 0);
                     spotX += 31;
@@ -774,12 +1455,9 @@ public class GameScreen extends JPanel {
             JButton button = new JButton();
             button.setMargin(new Insets(1, 2, 1, 2));
             button.setFont(new Font("Dialog", Font.BOLD, 10));
-             button.setBackground(new Color(255, 250, 190));
-             button.setFocusPainted(true);
-//            button.setOpaque(false);
-//            button.setContentAreaFilled(false);
-//            button.setBorderPainted(false);
-//            button.setFocusPainted(false);
+            button.setBackground(new Color(255, 250, 190));
+            button.setOpaque(true);
+            button.setFocusPainted(true);
             return button;
         }
 
@@ -814,8 +1492,27 @@ public class GameScreen extends JPanel {
                         JButton sb = skillSpotButtons[i][j];
                         sb.setVisible(true);
                         String val = slot.requiredSymbols[j];
-                        sb.setText((val == null || val.isEmpty()) ? "" : val);
-                        sb.setToolTipText(getSymbolDescription(val));
+                        DiceEnum placedDie = boardState.isPrimary ? getPlacedDie(i, j) : null;
+                        if (placedDie != null) {
+                            sb.setIcon(createDiceIcon(placedDie));
+                            sb.setText("");
+                            sb.setBackground(new Color(210, 235, 210));
+                        } else if (val != null && !val.isEmpty() && !kSkillSymbolMatch.equals(val)
+                                && !kSkillSymbolDifferent.equals(val)) {
+                            sb.setIcon(getSymbolIcon(val));
+                            sb.setText("");
+                            sb.setBackground(new Color(255, 250, 190));
+                        } else {
+                            sb.setIcon(null);
+                            sb.setText((val == null || val.isEmpty()) ? "" : val);
+                            sb.setBackground(new Color(255, 250, 190));
+                        }
+                        String tooltip = getSymbolDescription(val);
+                        if (placedDie != null) {
+                            String dieText = getDieLabel(placedDie);
+                            tooltip = tooltip == null ? "Placed: " + dieText : "Placed: " + dieText + " / " + tooltip;
+                        }
+                        sb.setToolTipText(tooltip);
                     }
                 }
             }
@@ -830,6 +1527,7 @@ public class GameScreen extends JPanel {
         private String handle;
         private String hero;
         private String sheetPath;
+        private boolean isPrimary;
 
         private int level;
         private int exp;

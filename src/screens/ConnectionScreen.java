@@ -195,13 +195,31 @@ public class ConnectionScreen extends JFrame {
             state = s.getCurrentLobbyState();
         }
 
-        setContentPane(new GameScreen(state, me, this::sendGameplayChatMessage));
+        setContentPane(new GameScreen(state, me, this::sendGameplayChatMessage, this::sendGameplayActionMessage));
         revalidate();
         repaint();
     }
 
     private void sendGameplayChatMessage(String message) {
         sendChatMessage(message);
+    }
+
+    private void sendGameplayActionMessage(GameMessage message) {
+        if (message == null) {
+            return;
+        }
+
+        if (host && s != null) {
+            s.applyGameAction(message, me);
+            return;
+        }
+
+        if (!host && c != null) {
+            try {
+                c.sendGameAction(message);
+            } catch (IOException e) {
+            }
+        }
     }
 
     private void selectDragon() {

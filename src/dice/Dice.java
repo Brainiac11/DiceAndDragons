@@ -2,7 +2,13 @@ package src.dice;
 
 public class Dice {
     private DiceEnum rolledValue;
-    private DiceEnum[] diceTypes = DiceEnum.values();
+    private static final DiceEnum[] diceTypes = {
+            DiceEnum.SWORD,
+            DiceEnum.CROSSBOWS,
+            DiceEnum.DAGGGERS,
+            DiceEnum.SHIELD,
+            DiceEnum.DRAGON
+    };
 
     public DiceEnum rollDice() {
         rolledValue = diceTypes[(int) Math.round(Math.random() * diceTypes.length)];
