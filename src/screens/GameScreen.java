@@ -77,6 +77,7 @@ public class GameScreen extends JPanel {
     private JButton[] diceButtons;
     private JButton rollButton;
     private JButton clearSelectionButton;
+    private JButton endTurnButton;
 
     private String localHandle;
     private String primaryHandle;
@@ -135,9 +136,11 @@ public class GameScreen extends JPanel {
         dragonInfoLabel = new JLabel("Dragon: None");
         marketInfoLabel = new JLabel("Village: None");
         teamGoldInfoLabel = new JLabel("Team Gold: 0");
+        endTurnButton = new JButton("End Turn");
         encounterInfoPanel.add(dragonInfoLabel);
         encounterInfoPanel.add(marketInfoLabel);
         encounterInfoPanel.add(teamGoldInfoLabel);
+        encounterInfoPanel.add(endTurnButton);
         sidePanel.add(encounterInfoPanel, BorderLayout.NORTH);
 
         chatArea = new JTextArea(14, 28);
@@ -534,6 +537,10 @@ public class GameScreen extends JPanel {
 
         if (selectedCount == 0) {
             selectedCount = kDiceCount; // i think having this might let me roll all them at once
+            for (int i = 0; i<localDiceSelection.length; i++){
+                localDiceSelection[i] = true;
+            }
+
         }
 
         int[] indices = null;
@@ -1363,6 +1370,18 @@ public class GameScreen extends JPanel {
         private JButton[][] skillSpotButtons;
         private JButton[] itemButtons;
 
+
+
+        private boolean isTurn;
+
+        public boolean isTurn() {
+            return isTurn;
+        }
+
+        public void setTurn(boolean turn) {
+            isTurn = turn;
+        }
+
         private PlayerBoardPanel(BoardState boardState) {
             this.boardState = boardState;
 
@@ -1487,7 +1506,8 @@ public class GameScreen extends JPanel {
                         button.setText(slot.name);
                         button.setForeground(Color.BLACK);
                     }
-                    button.setBackground(new Color(255, 248, 220));
+                    button.setBackground(new Color(248, 242, 137));
+
                     for (int j = 0; j < kSkillSymbolCount; j++) {
                         JButton sb = skillSpotButtons[i][j];
                         sb.setVisible(true);
