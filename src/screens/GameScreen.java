@@ -611,6 +611,7 @@ public class GameScreen extends JPanel {
         if (usedSkills == null || skillIndex < 0 || skillIndex >= usedSkills.length) {
             return;
         }
+        if(boardState.skills[skillIndex].requiredSymbols == boardState)
 
         boolean next = !usedSkills[skillIndex];
         gameActionSender.accept(new GameMessage(GameMessage.SKILL_USED, skillIndex, next));
@@ -673,6 +674,15 @@ public class GameScreen extends JPanel {
             return null;
         }
         return dicePool[dieIndex];
+    }
+
+    private boolean canSkillActivate(int skillIndex, String skillName){
+        for(int i = 0; i<kSkillSymbolCount; i++){
+            if(!getPlacedDie(skillIndex, i).name().equals(kSkillToRequiredSymbols.get(skillName)[i])){
+                return false;
+            }
+        }
+        return true;
     }
 
     private String getDieLabel(DiceEnum value) {
@@ -1494,7 +1504,7 @@ public class GameScreen extends JPanel {
 
                 if (slot.locked) {
                     button.setText("Locked");
-                    button.setBackground(new Color(70, 70, 70));
+                    button.setBackground(new Color(70, 67, 70));
                     button.setForeground(Color.WHITE);
                     for (JButton sb : skillSpotButtons[i])
                         sb.setVisible(false);
