@@ -568,7 +568,7 @@ public class GameScreen extends JPanel {
         }
 
         SkillSlot slot = boardState.skills[skillIndex];
-        if (slot.locked) {
+        if (slot.locked || slot.covered) {
             return;
         }
 
@@ -604,6 +604,18 @@ public class GameScreen extends JPanel {
         }
     }
 
+    private boolean isSkillUsable(BoardState boardState, int skillIndex){
+        int i =0;
+        for(String symbol: boardState.skills[skillIndex].requiredSymbols ){
+           DiceEnum e =  getPlacedDie(skillIndex, i);
+            if(!symbol.isEmpty() && (e==null || !symbol.equals(getDieLabel(e)))){
+                return false;
+            }
+            i++;
+        }
+        return true;
+    }
+
     private void toggleSkillUsed(BoardState boardState, int skillIndex) {
         if (!canControlDice || gameActionSender == null || boardState == null || !boardState.isPrimary) {
             return;
@@ -611,7 +623,9 @@ public class GameScreen extends JPanel {
         if (usedSkills == null || skillIndex < 0 || skillIndex >= usedSkills.length) {
             return;
         }
-        if(boardState.skills[skillIndex].requiredSymbols == boardState)
+        if(!isSkillUsable(boardState, skillIndex)){
+            return;
+        }
 
         boolean next = !usedSkills[skillIndex];
         gameActionSender.accept(new GameMessage(GameMessage.SKILL_USED, skillIndex, next));
@@ -678,6 +692,7 @@ public class GameScreen extends JPanel {
 
     private boolean canSkillActivate(int skillIndex, String skillName){
         for(int i = 0; i<kSkillSymbolCount; i++){
+            assert getPlacedDie(skillIndex, i) != null;
             if(!getPlacedDie(skillIndex, i).name().equals(kSkillToRequiredSymbols.get(skillName)[i])){
                 return false;
             }
