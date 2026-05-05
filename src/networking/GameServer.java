@@ -5,6 +5,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import src.dice.DiceEnum;
 import src.item.ItemEnum;
 import src.item.VillageMarketplaceCatalog;
@@ -24,6 +26,7 @@ public class GameServer {
             DiceEnum.SHIELD,
             DiceEnum.DRAGON
     };
+    private static final Map<String, HeroStats> kHeroStats = createHeroStats();
 
     private final ServerSocket serverSocket;
     private final ArrayList<GameSubscriber> clients = new ArrayList<>();
@@ -37,6 +40,8 @@ public class GameServer {
     private int[] diceSkillIndex;
     private int[] diceSymbolIndex;
     private boolean[] usedSkills;
+    private int pendingDragonRetaliationSymbols;
+    private boolean pendingDragonRetaliation;
 
     public GameServer(String hostHandle) throws IOException {
         this.hostHandle = hostHandle.trim();
@@ -59,6 +64,7 @@ public class GameServer {
             cp.hero = p.hero;
             cp.ready = p.ready;
             cp.purchasedItems = p.purchasedItems == null ? new ArrayList<>() : new ArrayList<>(p.purchasedItems);
+            cp.currentHitPoints = p.currentHitPoints;
             copyPlayers.add(cp);
         }
 
@@ -105,6 +111,8 @@ public class GameServer {
         diceSkillIndex = new int[kDiceCount];
         diceSymbolIndex = new int[kDiceCount];
         usedSkills = new boolean[kSkillSlotCount];
+        pendingDragonRetaliationSymbols = 0;
+        pendingDragonRetaliation = false;
         fillDicePool();
         Arrays.fill(diceSkillIndex, -1);
         Arrays.fill(diceSymbolIndex, -1);
@@ -152,6 +160,7 @@ public class GameServer {
                     dicePool[i] = rollRandomDie();
                 }
             }
+            pendingDragonRetaliationSymbols = countDragonSymbols();
             return;
         }
 
@@ -164,6 +173,7 @@ public class GameServer {
             }
             dicePool[index] = rollRandomDie();
         }
+        pendingDragonRetaliationSymbols = countDragonSymbols();
     }
 
     private synchronized void placeDie(int dieIndex, int skillIndex, int symbolIndex) {
@@ -213,7 +223,123 @@ public class GameServer {
         if (skillIndex < 0 || skillIndex >= kSkillSlotCount) {
             return;
         }
-        usedSkills[skillIndex] = used;
+        if (used) {
+            usedSkills[skillIndex] = true;
+        }
+    }
+
+    private void resetPlayerHitPoints(PlayerInfo player) {
+        if (player == null) {
+            return;
+        }
+        HeroStats stats = getHeroStats(player.hero);
+        if (stats == null) {
+            return;
+        }
+        player.currentHitPoints = stats.hitPoints;
+    }
+
+    private void resetHitPointsForAllPlayers() {
+        for (PlayerInfo player : players) {
+            resetPlayerHitPoints(player);
+        }
+    }
+
+    private int getHeroArmourClass(String hero) {
+        HeroStats stats = getHeroStats(hero);
+        return stats == null ? 0 : stats.armourClass;
+    }
+
+    private int countDragonSymbols() {
+        ensureDiceState();
+        int total = 0;
+        for (DiceEnum face : dicePool) {
+            if (face == DiceEnum.DRAGON) {
+                total++;
+            }
+        }
+        return total;
+    }
+
+    private void applyDragonRetaliation(String handle) {
+        if (selectedDragon == null || selectedDragon.trim().isEmpty()) {
+            pendingDragonRetaliation = false;
+            return;
+        }
+
+        int dragonSymbols = pendingDragonRetaliationSymbols;
+        if (dragonSymbols <= 0) {
+            pendingDragonRetaliation = false;
+            return;
+        }
+
+        DragonCatalog.DragonProfile dragon = DragonCatalog.findById(selectedDragon);
+        if (dragon == null) {
+            pendingDragonRetaliation = false;
+            return;
+        }
+
+        PlayerInfo player = findPlayerByHandle(handle);
+        if (player == null) {
+            pendingDragonRetaliation = false;
+            return;
+        }
+
+        if (player.currentHitPoints < 0) {
+            resetPlayerHitPoints(player);
+        }
+        if (player.currentHitPoints < 0) {
+            pendingDragonRetaliation = false;
+            return;
+        }
+
+        int baseDamage = dragon.getCounterAttackDamage(dragonSymbols);
+        if (baseDamage <= 0) {
+            pendingDragonRetaliation = false;
+            return;
+        }
+
+        int armourClass = getHeroArmourClass(player.hero);
+        int damage = Math.max(0, baseDamage - armourClass);
+        int nextHp = Math.max(0, player.currentHitPoints - damage);
+        player.currentHitPoints = nextHp;
+
+        String attacker = dragon.getDisplayName();
+        String target = player.handle == null ? "Hero" : player.handle;
+        chatLog.add(attacker + " counter attacks " + target + " for " + damage
+                + " HP (" + baseDamage + " - AC " + armourClass + ").");
+        pendingDragonRetaliationSymbols = 0;
+        pendingDragonRetaliation = false;
+    }
+
+    private HeroStats getHeroStats(String hero) {
+        HeroStats stats = kHeroStats.get(hero);
+        if (stats == null) {
+            return null;
+        }
+        return stats;
+    }
+
+    private static Map<String, HeroStats> createHeroStats() {
+        LinkedHashMap<String, HeroStats> map = new LinkedHashMap<>();
+
+        map.put(Heroes.WARRIOR, new HeroStats(60, 3));
+        map.put(Heroes.WIZARD, new HeroStats(42, 1));
+        map.put(Heroes.CLERIC, new HeroStats(50, 2));
+        map.put(Heroes.RANGER, new HeroStats(48, 2));
+        map.put(Heroes.ROGUE, new HeroStats(44, 1));
+
+        return map;
+    }
+
+    private static final class HeroStats {
+        private final int hitPoints;
+        private final int armourClass;
+
+        private HeroStats(int hitPoints, int armourClass) {
+            this.hitPoints = hitPoints;
+            this.armourClass = armourClass;
+        }
     }
 
     private synchronized boolean isPrimaryHandle(String handle) {
@@ -252,6 +378,17 @@ public class GameServer {
 
         if (GameMessage.SKILL_USED.equals(message.type)) {
             setSkillUsed(message.skillIndex, message.skillUsed);
+            if (message.skillUsed) {
+                pendingDragonRetaliation = true;
+            }
+            broadcastLobbyState();
+            return;
+        }
+
+        if (GameMessage.END_TURN.equals(message.type)) {
+            if (pendingDragonRetaliation) {
+                applyDragonRetaliation(handle);
+            }
             broadcastLobbyState();
         }
     }
@@ -261,6 +398,9 @@ public class GameServer {
             if (p.handle.equals(hostHandle)) {
                 p.hero = hero;
                 p.ready = isRealHero(hero);
+                if (!gameStarted) {
+                    resetPlayerHitPoints(p);
+                }
                 break;
             }
         }
@@ -380,6 +520,7 @@ public class GameServer {
         }
         gameStarted = true;
         resetDiceState();
+        resetHitPointsForAllPlayers();
         chatLog.add("*****Host Started the Game*****");
         LobbyState startedState = getCurrentLobbyState();
         sendGameMessage(new GameMessage(GameMessage.START, "Game started", startedState));
@@ -492,7 +633,8 @@ public class GameServer {
                 } else if (GameMessage.DICE_ROLL.equals(in.type)
                         || GameMessage.DICE_PLACE.equals(in.type)
                         || GameMessage.DICE_REMOVE.equals(in.type)
-                        || GameMessage.SKILL_USED.equals(in.type)) {
+                        || GameMessage.SKILL_USED.equals(in.type)
+                        || GameMessage.END_TURN.equals(in.type)) {
                     applyGameAction(in, handle);
                 }
             }
@@ -529,6 +671,9 @@ public class GameServer {
             if (p.handle.equals(handle)) {
                 p.hero = hero;
                 p.ready = isRealHero(hero);
+                if (!gameStarted) {
+                    resetPlayerHitPoints(p);
+                }
                 return;
             }
         }

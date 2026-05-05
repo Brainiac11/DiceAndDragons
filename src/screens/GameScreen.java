@@ -137,6 +137,7 @@ public class GameScreen extends JPanel {
         marketInfoLabel = new JLabel("Village: None");
         teamGoldInfoLabel = new JLabel("Team Gold: 0");
         endTurnButton = new JButton("End Turn");
+        endTurnButton.addActionListener(e -> endTurn());
         encounterInfoPanel.add(dragonInfoLabel);
         encounterInfoPanel.add(marketInfoLabel);
         encounterInfoPanel.add(teamGoldInfoLabel);
@@ -331,6 +332,9 @@ public class GameScreen extends JPanel {
         }
         if (clearSelectionButton != null) {
             clearSelectionButton.setEnabled(canControlDice);
+        }
+        if (endTurnButton != null) {
+            endTurnButton.setEnabled(canControlDice);
         }
     }
 
@@ -604,15 +608,55 @@ public class GameScreen extends JPanel {
         }
     }
 
-    private boolean isSkillUsable(BoardState boardState, int skillIndex){
-        int i =0;
-        for(String symbol: boardState.skills[skillIndex].requiredSymbols ){
-           DiceEnum e =  getPlacedDie(skillIndex, i);
-            if(!symbol.isEmpty() && (e==null || !symbol.equals(getDieLabel(e)))){
+    private boolean isSkillUsable(BoardState boardState, int skillIndex) {
+        if (boardState == null || boardState.skills == null
+                || skillIndex < 0 || skillIndex >= boardState.skills.length) {
+            return false;
+        }
+
+        SkillSlot slot = boardState.skills[skillIndex];
+        if (slot == null || slot.requiredSymbols == null) {
+            return false;
+        }
+
+        String matchSymbol = null;
+        ArrayList<String> differentSymbols = new ArrayList<>();
+
+        for (int i = 0; i < slot.requiredSymbols.length; i++) {
+            String required = slot.requiredSymbols[i];
+            if (required == null || required.isEmpty()) {
+                continue;
+            }
+
+            DiceEnum placed = getPlacedDie(skillIndex, i);
+            if (placed == null) {
                 return false;
             }
-            i++;
+
+            String placedSymbol = getDieLabel(placed);
+
+            if (required.equals(kSkillSymbolMatch)) {
+                if (matchSymbol == null) {
+                    matchSymbol = placedSymbol;
+                } else if (!matchSymbol.equals(placedSymbol)) {
+                    return false;
+                }
+                continue;
+            }
+
+            if (required.equals(kSkillSymbolDifferent)) {
+                if (differentSymbols.contains(placedSymbol)) {
+                    return false;
+                }
+                differentSymbols.add(placedSymbol);
+                continue;
+            }
+
+            if (!required.equals(placedSymbol)) {
+                return false;
+            }
         }
+
         return true;
     }
 
@@ -623,29 +667,46 @@ public class GameScreen extends JPanel {
         if (usedSkills == null || skillIndex < 0 || skillIndex >= usedSkills.length) {
             return;
         }
-        if(!isSkillUsable(boardState, skillIndex)){
+        if (boardState.skills == null || skillIndex >= boardState.skills.length) {
+            return;
+        }
+        SkillSlot slot = boardState.skills[skillIndex];
+        if (slot == null || slot.locked || slot.covered) {
+            return;
+        }
+        if (usedSkills[skillIndex]) {
+            return;
+        }
+        if (!isSkillUsable(boardState, skillIndex)) {
             return;
         }
 
-        boolean next = !usedSkills[skillIndex];
-        gameActionSender.accept(new GameMessage(GameMessage.SKILL_USED, skillIndex, next));
-        setSkillUsedLocal(boardState, skillIndex, next);
+        gameActionSender.accept(new GameMessage(GameMessage.SKILL_USED, skillIndex, true));
+        setSkillUsedLocal(boardState, skillIndex, true);
     }
 
     private void setSkillUsedLocal(BoardState boardState, int skillIndex, boolean used) {
         if (usedSkills == null || skillIndex < 0 || skillIndex >= usedSkills.length) {
             return;
         }
-        usedSkills[skillIndex] = used;
+        usedSkills[skillIndex] = usedSkills[skillIndex] || used;
         if (boardState != null && boardState.skills != null && skillIndex < boardState.skills.length) {
             SkillSlot slot = boardState.skills[skillIndex];
             if (slot != null && !slot.locked) {
-                slot.covered = used;
+                slot.covered = usedSkills[skillIndex];
             }
         }
         if (primaryBoardPanel != null) {
             primaryBoardPanel.refreshBoardText();
         }
+    }
+
+    private void endTurn() {
+        if (!canControlDice || gameActionSender == null) {
+            return;
+        }
+        gameActionSender.accept(new GameMessage(GameMessage.END_TURN, ""));
+        clearDiceSelection();
     }
 
     private void applyUsedSkillsToBoard(BoardState state) {
@@ -924,6 +985,7 @@ public class GameScreen extends JPanel {
                 if (existing == null || !existing.hero.equals(hero)) {
                     PlayerInfo copy = new PlayerInfo(handle);
                     copy.hero = hero;
+                    copy.currentHitPoints = player.currentHitPoints;
                     if (player.purchasedItems != null) {
                         copy.purchasedItems = new ArrayList<>(player.purchasedItems);
                     }
@@ -931,6 +993,7 @@ public class GameScreen extends JPanel {
                 } else {
                     boardState = existing;
                     applyBoardBaseValues(boardState, hero, teamGold);
+                    applyCurrentHitPoints(boardState, player);
                     updateBoardFromPurchases(boardState, selectedDragon, player.purchasedItems);
                 }
 
@@ -966,6 +1029,7 @@ public class GameScreen extends JPanel {
         state.hero = hero;
         state.sheetPath = resolveSheetPath(hero);
         applyBoardBaseValues(state, hero, teamGold);
+        applyCurrentHitPoints(state, player);
 
         String[] heroSkills = getSkillsForHero(hero);
         state.skills = new SkillSlot[kSkillSlotCount];
@@ -996,6 +1060,13 @@ public class GameScreen extends JPanel {
 
         updateBoardFromPurchases(state, selectedDragon, player.purchasedItems);
         return state;
+    }
+
+    private void applyCurrentHitPoints(BoardState state, PlayerInfo player) {
+        if (state == null || player == null || player.currentHitPoints < 0) {
+            return;
+        }
+        state.hitPoints = player.currentHitPoints;
     }
 
     private void applyBoardBaseValues(BoardState state, String hero, int teamGold) {
@@ -1253,17 +1324,18 @@ public class GameScreen extends JPanel {
                 new String[] { "Slash", "Smashing Blow", "Savage Attack", "Parry", "Strike", "Critical Hit" });
 
         map.put(Heroes.WIZARD,
-                new String[] { "Lightning Storm", "Genie", "Magic Bolt", "Fireball", "Shield", "Drain Life" });
+            new String[] { "Strike", "Magic Bolt", "Fireball", "Lightning Storm", "Shield", "Critical Hit" });
 
         map.put(Heroes.CLERIC,
-                new String[] { "Blessing", "Smite", "Healing Hands", "Holy Storm", "Holy Water", "Heal" });
+            new String[] { "Holy Strike", "Blessing", "Smite", "Healing Hands", "Holy Storm", "Shield" });
 
         map.put(Heroes.RANGER,
-                new String[] { "Pin Down", "Bestial Pounce", "Throwing Axe", "Accurate Shot", "Dual Shot",
-                        "Crossfire" });
+            new String[] { "Wild Strike", "Accurate Shot", "Dual Shot", "Crossfire", "Pin Down",
+                "Critical Hit" });
 
         map.put(Heroes.ROGUE,
-                new String[] { "Sneak Attack", "Deflect", "Stab", "Flanking Blow", "Sudden Death", "Poison Tip" });
+            new String[] { "Strike", "Stab", "Flanking Strike", "Sneak Attack", "Sudden Death",
+                "Critical Hit" });
 
         return map;
     }

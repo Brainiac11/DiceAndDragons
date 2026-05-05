@@ -61,35 +61,43 @@ public final class DragonCatalog {
 
         put(map, new DragonProfile(
                 "YOUNG_RED_DRAGON",
-                "Young Red Dragon"));
+            "Young Red Dragon",
+            new int[] { 5, 7, 10 }));
 
         put(map, new DragonProfile(
                 "PALE_DRAGON",
-                "Pale Dragon"));
+            "Pale Dragon",
+            new int[] { 6, 9, 12 }));
 
         put(map, new DragonProfile(
                 "YOUNG_BLACK_DRAGON",
-                "Young Black Dragon"));
+            "Young Black Dragon",
+            new int[] { 6, 10, 13 }));
 
         put(map, new DragonProfile(
                 "GREEN_DRAGON",
-                "Green Dragon"));
+            "Green Dragon",
+            new int[] { 6, 10, 13 }));
 
         put(map, new DragonProfile(
                 "RED_DRAGON",
-                "Red Dragon"));
+            "Red Dragon",
+            new int[] { 7, 11, 15 }));
 
         put(map, new DragonProfile(
                 "BLUE_DRAGON",
-                "Blue Dragon"));
+            "Blue Dragon",
+            new int[] { 6, 10, 13 }));
 
         put(map, new DragonProfile(
                 "UNDEAD_DRAGON",
-                "Undead Dragon"));
+            "Undead Dragon",
+            new int[] { 7, 11, 14 }));
 
         put(map, new DragonProfile(
                 "BLACK_DRAGON",
-                "Black Dragon"));
+            "Black Dragon",
+            new int[] { 7, 13, 18 }));
 
         return map;
     }
@@ -109,10 +117,16 @@ public final class DragonCatalog {
     public static final class DragonProfile {
         private final String id;
         private final String displayName;
+        private final int[] counterAttackDamage;
 
         public DragonProfile(String id, String displayName) {
+            this(id, displayName, null);
+        }
+
+        public DragonProfile(String id, String displayName, int[] counterAttackDamage) {
             this.id = id;
             this.displayName = displayName;
+            this.counterAttackDamage = counterAttackDamage == null ? new int[0] : counterAttackDamage.clone();
         }
 
         public String getId() {
@@ -121,6 +135,17 @@ public final class DragonCatalog {
 
         public String getDisplayName() {
             return displayName;
+        }
+
+        public int getCounterAttackDamage(int dragonSymbols) {
+            if (dragonSymbols <= 0 || counterAttackDamage.length == 0) {
+                return 0;
+            }
+            int index = Math.min(dragonSymbols, counterAttackDamage.length) - 1;
+            if (index < 0 || index >= counterAttackDamage.length) {
+                return 0;
+            }
+            return counterAttackDamage[index];
         }
     }
 }

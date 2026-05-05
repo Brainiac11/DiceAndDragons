@@ -18,6 +18,7 @@ public class GameMessage implements Serializable {
     public static final String DICE_PLACE = "DICE_PLACE";
     public static final String DICE_REMOVE = "DICE_REMOVE";
     public static final String SKILL_USED = "SKILL_USED";
+    public static final String END_TURN = "END_TURN";
 
     public String type;
     public String text;
