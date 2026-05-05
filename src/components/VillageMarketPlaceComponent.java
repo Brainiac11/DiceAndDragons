@@ -1,11 +1,11 @@
-//package src.components;
+// package src.components;
 //
-//import javax.swing.*;
+// import javax.swing.*;
 //
-//public class VillageMarketPlaceComponent extends JComponent  {
-//    public
+// public class VillageMarketPlaceComponent extends JComponent {
+// public
 //
-//    public VillageMarketPlaceComponent(){
+// public VillageMarketPlaceComponent(){
 //
-//    }
-//}
+// }
+// }

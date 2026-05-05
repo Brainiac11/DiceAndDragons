@@ -61,43 +61,43 @@ public final class DragonCatalog {
 
         put(map, new DragonProfile(
                 "YOUNG_RED_DRAGON",
-            "Young Red Dragon",
-            new int[] { 5, 7, 10 }));
+                "Young Red Dragon",
+                new int[] { 5, 7, 10 }));
 
         put(map, new DragonProfile(
                 "PALE_DRAGON",
-            "Pale Dragon",
-            new int[] { 6, 9, 12 }));
+                "Pale Dragon",
+                new int[] { 6, 9, 12 }));
 
         put(map, new DragonProfile(
                 "YOUNG_BLACK_DRAGON",
-            "Young Black Dragon",
-            new int[] { 6, 10, 13 }));
+                "Young Black Dragon",
+                new int[] { 6, 10, 13 }));
 
         put(map, new DragonProfile(
                 "GREEN_DRAGON",
-            "Green Dragon",
-            new int[] { 6, 10, 13 }));
+                "Green Dragon",
+                new int[] { 6, 10, 13 }));
 
         put(map, new DragonProfile(
                 "RED_DRAGON",
-            "Red Dragon",
-            new int[] { 7, 11, 15 }));
+                "Red Dragon",
+                new int[] { 7, 11, 15 }));
 
         put(map, new DragonProfile(
                 "BLUE_DRAGON",
-            "Blue Dragon",
-            new int[] { 6, 10, 13 }));
+                "Blue Dragon",
+                new int[] { 6, 10, 13 }));
 
         put(map, new DragonProfile(
                 "UNDEAD_DRAGON",
-            "Undead Dragon",
-            new int[] { 7, 11, 14 }));
+                "Undead Dragon",
+                new int[] { 7, 11, 14 }));
 
         put(map, new DragonProfile(
                 "BLACK_DRAGON",
-            "Black Dragon",
-            new int[] { 7, 13, 18 }));
+                "Black Dragon",
+                new int[] { 7, 13, 18 }));
 
         return map;
     }

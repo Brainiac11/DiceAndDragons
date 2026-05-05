@@ -541,7 +541,7 @@ public class GameScreen extends JPanel {
 
         if (selectedCount == 0) {
             selectedCount = kDiceCount; // i think having this might let me roll all them at once
-            for (int i = 0; i<localDiceSelection.length; i++){
+            for (int i = 0; i < localDiceSelection.length; i++) {
                 localDiceSelection[i] = true;
             }
 
@@ -751,10 +751,10 @@ public class GameScreen extends JPanel {
         return dicePool[dieIndex];
     }
 
-    private boolean canSkillActivate(int skillIndex, String skillName){
-        for(int i = 0; i<kSkillSymbolCount; i++){
+    private boolean canSkillActivate(int skillIndex, String skillName) {
+        for (int i = 0; i < kSkillSymbolCount; i++) {
             assert getPlacedDie(skillIndex, i) != null;
-            if(!getPlacedDie(skillIndex, i).name().equals(kSkillToRequiredSymbols.get(skillName)[i])){
+            if (!getPlacedDie(skillIndex, i).name().equals(kSkillToRequiredSymbols.get(skillName)[i])) {
                 return false;
             }
         }
@@ -1324,18 +1324,18 @@ public class GameScreen extends JPanel {
                 new String[] { "Slash", "Smashing Blow", "Savage Attack", "Parry", "Strike", "Critical Hit" });
 
         map.put(Heroes.WIZARD,
-            new String[] { "Strike", "Magic Bolt", "Fireball", "Lightning Storm", "Shield", "Critical Hit" });
+                new String[] { "Strike", "Magic Bolt", "Fireball", "Lightning Storm", "Shield", "Critical Hit" });
 
         map.put(Heroes.CLERIC,
-            new String[] { "Holy Strike", "Blessing", "Smite", "Healing Hands", "Holy Storm", "Shield" });
+                new String[] { "Holy Strike", "Blessing", "Smite", "Healing Hands", "Holy Storm", "Shield" });
 
         map.put(Heroes.RANGER,
-            new String[] { "Wild Strike", "Accurate Shot", "Dual Shot", "Crossfire", "Pin Down",
-                "Critical Hit" });
+                new String[] { "Wild Strike", "Accurate Shot", "Dual Shot", "Crossfire", "Pin Down",
+                        "Critical Hit" });
 
         map.put(Heroes.ROGUE,
-            new String[] { "Strike", "Stab", "Flanking Strike", "Sneak Attack", "Sudden Death",
-                "Critical Hit" });
+                new String[] { "Strike", "Stab", "Flanking Strike", "Sneak Attack", "Sudden Death",
+                        "Critical Hit" });
 
         return map;
     }
@@ -1466,8 +1466,6 @@ public class GameScreen extends JPanel {
         private JButton[] skillButtons;
         private JButton[][] skillSpotButtons;
         private JButton[] itemButtons;
-
-
 
         private boolean isTurn;
 
