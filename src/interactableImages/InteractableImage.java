@@ -1,7 +1,5 @@
 package src.interactableImages;
 
-import javax.imageio.ImageIO;
-import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
@@ -9,11 +7,13 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.function.Consumer;
+import javax.imageio.ImageIO;
+import javax.swing.*;
 
-public class InteractableImage extends JLabel implements MouseListener{
+public class InteractableImage extends JLabel implements MouseListener {
     private BufferedImage image;
-    private int x,y;
-    private int width,height;
+    private int x, y;
+    private int width, height;
 
     private Consumer<MouseEvent> mouseEventListener;
 
@@ -89,7 +89,7 @@ public class InteractableImage extends JLabel implements MouseListener{
         this.y = y;
     }
 
-    public void setCoordinates(int x, int y){
+    public void setCoordinates(int x, int y) {
         this.y = y;
         this.x = x;
     }
@@ -112,19 +112,21 @@ public class InteractableImage extends JLabel implements MouseListener{
         this.height = height;
     }
 
-    public void setDimensions(int width, int height){
+    public void setDimensions(int width, int height) {
         this.height = height;
         this.width = width;
     }
 
     /**
-     *  Maintains aspect ratio
-     * @param proportion the proportion to scale the height and width by. between 0.0<proportion<=1.0
+     * Maintains aspect ratio
+     * 
+     * @param proportion the proportion to scale the height and width by. between
+     *                   0.0<proportion<=1.0
      *
      */
-    public void scaleImageDimensions(double proportion){
-        this.height = (int) ((int) image.getHeight()*proportion);
-        this.width = (int) ((int) image.getWidth()*proportion);
+    public void scaleImageDimensions(double proportion) {
+        this.height = (int) ((int) image.getHeight() * proportion);
+        this.width = (int) ((int) image.getWidth() * proportion);
     }
 
     public Consumer<MouseEvent> getMouseEventListener() {

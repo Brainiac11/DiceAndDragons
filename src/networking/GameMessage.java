@@ -19,6 +19,7 @@ public class GameMessage implements Serializable {
     public static final String DICE_REMOVE = "DICE_REMOVE";
     public static final String SKILL_USED = "SKILL_USED";
     public static final String END_TURN = "END_TURN";
+    public static final String TRANSFER_UNUSED_DICE = "TRANSFER_UNUSED_DICE";
 
     public String type;
     public String text;
@@ -43,6 +44,12 @@ public class GameMessage implements Serializable {
         this.type = type;
         this.text = text;
         this.lobbyState = lobbyState;
+    }
+
+    public GameMessage(String type, String text, int[] diceIndices) {
+        this.type = type;
+        this.text = text;
+        this.diceIndices = diceIndices;
     }
 
     public GameMessage(String type, int[] diceIndices) {

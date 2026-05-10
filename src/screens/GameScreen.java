@@ -23,8 +23,11 @@ import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -705,8 +708,94 @@ public class GameScreen extends JPanel {
         if (!canControlDice || gameActionSender == null) {
             return;
         }
+        if (!promptUnusedDiceTransfer()) {
+            return;
+        }
         gameActionSender.accept(new GameMessage(GameMessage.END_TURN, ""));
         clearDiceSelection();
+    }
+
+    private boolean promptUnusedDiceTransfer() {
+        ArrayList<Integer> unusedDice = getUnusedDiceIndices();
+        if (unusedDice.isEmpty()) {
+            return true;
+        }
+
+        ArrayList<String> targets = getTransferTargets();
+        if (targets.isEmpty()) {
+            return true;
+        }
+
+        JPanel panel = new JPanel(new BorderLayout(6, 6));
+        JComboBox<String> targetBox = new JComboBox<>(targets.toArray(new String[0]));
+        panel.add(new JLabel("Transfer to:"), BorderLayout.NORTH);
+        panel.add(targetBox, BorderLayout.CENTER);
+
+        JPanel diceList = new JPanel(new GridLayout(0, 1, 4, 4));
+        Map<Integer, JCheckBox> checkboxes = new LinkedHashMap<>();
+        for (int dieIndex : unusedDice) {
+            DiceEnum face = dicePool == null || dieIndex >= dicePool.length ? null : dicePool[dieIndex];
+            String label = "Die " + (dieIndex + 1) + " - " + getDieDisplayName(face);
+            JCheckBox box = new JCheckBox(label);
+            box.setIcon(createDiceIcon(face));
+            box.setSelected(true);
+            checkboxes.put(dieIndex, box);
+            diceList.add(box);
+        }
+
+        panel.add(diceList, BorderLayout.SOUTH);
+
+        String[] options = { "Transfer and End Turn", "End Turn", "Cancel" };
+        int choice = JOptionPane.showOptionDialog(this, panel, "Transfer Unused Dice",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+
+        if (choice == 2 || choice == JOptionPane.CLOSED_OPTION) {
+            return false;
+        }
+
+        if (choice == 0) {
+            ArrayList<Integer> selected = new ArrayList<>();
+            for (Map.Entry<Integer, JCheckBox> entry : checkboxes.entrySet()) {
+                if (entry.getValue().isSelected()) {
+                    selected.add(entry.getKey());
+                }
+            }
+            if (!selected.isEmpty()) {
+                int[] indices = new int[selected.size()];
+                for (int i = 0; i < selected.size(); i++) {
+                    indices[i] = selected.get(i);
+                }
+                String targetHandle = (String) targetBox.getSelectedItem();
+                gameActionSender.accept(new GameMessage(GameMessage.TRANSFER_UNUSED_DICE, targetHandle, indices));
+            }
+        }
+
+        return true;
+    }
+
+    private ArrayList<Integer> getUnusedDiceIndices() {
+        ArrayList<Integer> unused = new ArrayList<>();
+        for (int i = 0; i < kDiceCount; i++) {
+            DiceEnum face = dicePool == null || i >= dicePool.length ? null : dicePool[i];
+            if (!isDiePlaced(i) && face != DiceEnum.DRAGON) {
+                unused.add(i);
+            }
+        }
+        return unused;
+    }
+
+    private ArrayList<String> getTransferTargets() {
+        ArrayList<String> targets = new ArrayList<>();
+        for (String handle : boardStateByPlayer.keySet()) {
+            if (handle == null || handle.isBlank()) {
+                continue;
+            }
+            if (primaryHandle != null && handle.equalsIgnoreCase(primaryHandle)) {
+                continue;
+            }
+            targets.add(handle);
+        }
+        return targets;
     }
 
     private void applyUsedSkillsToBoard(BoardState state) {
@@ -753,8 +842,12 @@ public class GameScreen extends JPanel {
 
     private boolean canSkillActivate(int skillIndex, String skillName) {
         for (int i = 0; i < kSkillSymbolCount; i++) {
-            assert getPlacedDie(skillIndex, i) != null;
-            if (!getPlacedDie(skillIndex, i).name().equals(kSkillToRequiredSymbols.get(skillName)[i])) {
+            DiceEnum placed = getPlacedDie(skillIndex, i);
+            String required = kSkillToRequiredSymbols.get(skillName)[i];
+            if (placed == null || required == null) {
+                return false;
+            }
+            if (!getDieSkillSymbol(placed).equals(required)) {
                 return false;
             }
         }
@@ -784,6 +877,31 @@ public class GameScreen extends JPanel {
             return "DR";
         }
         return "?";
+    }
+
+    private String getDieDisplayName(DiceEnum value) {
+        if (value == null) {
+            return "Unknown";
+        }
+        if (value == DiceEnum.SWORD) {
+            return "Sword";
+        }
+        if (value == DiceEnum.MAGIC) {
+            return "Magic";
+        }
+        if (value == DiceEnum.CROSSBOWS) {
+            return "Crossbow";
+        }
+        if (value == DiceEnum.DAGGGERS) {
+            return "Daggers";
+        }
+        if (value == DiceEnum.SHIELD) {
+            return "Shield";
+        }
+        if (value == DiceEnum.DRAGON) {
+            return "Dragon";
+        }
+        return value.name();
     }
 
     private String getDieSkillSymbol(DiceEnum value) {
@@ -1113,6 +1231,8 @@ public class GameScreen extends JPanel {
             }
         }
 
+        sortPurchasedSkillsByMarketOrder(selectedDragon, boughtSkills);
+
         int slotIndex = 0;
         for (String item : boughtItems) {
             if (slotIndex >= kItemSlotCount) {
@@ -1140,6 +1260,35 @@ public class GameScreen extends JPanel {
             slot.covered = false;
             boughtSkillIndex++;
         }
+    }
+
+    private void sortPurchasedSkillsByMarketOrder(String selectedDragon, ArrayList<String> boughtSkills) {
+        if (boughtSkills == null || boughtSkills.size() < 2) {
+            return;
+        }
+
+        VillageMarketplaceCatalog.Marketplace market = VillageMarketplaceCatalog.forDragon(selectedDragon);
+        if (market == null) {
+            return;
+        }
+
+        Map<String, Integer> skillOrder = new HashMap<>();
+        int orderIndex = 0;
+        for (VillageMarketplaceCatalog.MarketplaceItem item : market.getItems()) {
+            if (item != null && item.getType() == ItemEnum.SKILL) {
+                skillOrder.putIfAbsent(item.getName(), orderIndex);
+            }
+            orderIndex++;
+        }
+
+        boughtSkills.sort((left, right) -> {
+            int leftOrder = skillOrder.getOrDefault(left, Integer.MAX_VALUE);
+            int rightOrder = skillOrder.getOrDefault(right, Integer.MAX_VALUE);
+            if (leftOrder != rightOrder) {
+                return Integer.compare(leftOrder, rightOrder);
+            }
+            return left.compareToIgnoreCase(right);
+        });
     }
 
     private void resetSkillSlotsToBase(BoardState boardState) {

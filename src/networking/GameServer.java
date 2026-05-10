@@ -27,11 +27,14 @@ public class GameServer {
             DiceEnum.DRAGON
     };
     private static final Map<String, HeroStats> kHeroStats = createHeroStats();
+    private static final Map<String, String[]> kHeroToSkills = createHeroToSkillsMap();
+    private static final int kShieldValue = 2;
 
     private final ServerSocket serverSocket;
     private final ArrayList<GameSubscriber> clients = new ArrayList<>();
     private final ArrayList<PlayerInfo> players = new ArrayList<>();
     private final ArrayList<String> chatLog = new ArrayList<>();
+    private final Map<String, Integer> shieldByHandle = new LinkedHashMap<>();
     private final String hostHandle;
     private int teamGold;
     private boolean gameStarted;
@@ -65,6 +68,7 @@ public class GameServer {
             cp.ready = p.ready;
             cp.purchasedItems = p.purchasedItems == null ? new ArrayList<>() : new ArrayList<>(p.purchasedItems);
             cp.currentHitPoints = p.currentHitPoints;
+            cp.bankedDice = p.bankedDice == null ? new ArrayList<>() : new ArrayList<>(p.bankedDice);
             copyPlayers.add(cp);
         }
 
@@ -113,6 +117,7 @@ public class GameServer {
         usedSkills = new boolean[kSkillSlotCount];
         pendingDragonRetaliationSymbols = 0;
         pendingDragonRetaliation = false;
+        shieldByHandle.clear();
         fillDicePool();
         Arrays.fill(diceSkillIndex, -1);
         Arrays.fill(diceSymbolIndex, -1);
@@ -160,7 +165,8 @@ public class GameServer {
                     dicePool[i] = rollRandomDie();
                 }
             }
-            pendingDragonRetaliationSymbols = countDragonSymbols();
+            pendingDragonRetaliationSymbols = Math.max(pendingDragonRetaliationSymbols, countDragonSymbols());
+            pendingDragonRetaliation = pendingDragonRetaliation || pendingDragonRetaliationSymbols > 0;
             return;
         }
 
@@ -173,7 +179,8 @@ public class GameServer {
             }
             dicePool[index] = rollRandomDie();
         }
-        pendingDragonRetaliationSymbols = countDragonSymbols();
+        pendingDragonRetaliationSymbols = Math.max(pendingDragonRetaliationSymbols, countDragonSymbols());
+        pendingDragonRetaliation = pendingDragonRetaliation || pendingDragonRetaliationSymbols > 0;
     }
 
     private synchronized void placeDie(int dieIndex, int skillIndex, int symbolIndex) {
@@ -206,6 +213,79 @@ public class GameServer {
         diceSymbolIndex[dieIndex] = -1;
     }
 
+    private synchronized void transferUnusedDice(String fromHandle, String targetHandle, int[] diceIndices) {
+        ensureDiceState();
+        if (targetHandle == null || targetHandle.trim().isEmpty() || diceIndices == null || diceIndices.length == 0) {
+            return;
+        }
+
+        PlayerInfo target = findPlayerByHandle(targetHandle);
+        if (target == null || target.handle == null) {
+            return;
+        }
+        if (fromHandle != null && target.handle.equalsIgnoreCase(fromHandle.trim())) {
+            return;
+        }
+
+        ArrayList<DiceEnum> transferred = new ArrayList<>();
+        for (int dieIndex : diceIndices) {
+            if (dieIndex < 0 || dieIndex >= kDiceCount) {
+                continue;
+            }
+            if (diceSkillIndex[dieIndex] >= 0 || diceSymbolIndex[dieIndex] >= 0) {
+                continue;
+            }
+            DiceEnum face = dicePool[dieIndex];
+            if (face == DiceEnum.DRAGON) {
+                continue;
+            }
+            if (face != null) {
+                transferred.add(face);
+            }
+        }
+
+        if (transferred.isEmpty()) {
+            return;
+        }
+
+        if (target.bankedDice == null) {
+            target.bankedDice = new ArrayList<>();
+        }
+        target.bankedDice.addAll(transferred);
+
+        String sender = fromHandle == null || fromHandle.isBlank() ? "Host" : fromHandle.trim();
+        chatLog.add(sender + " transferred " + formatDiceList(transferred) + " to " + target.handle);
+    }
+
+    private String formatDiceList(ArrayList<DiceEnum> dice) {
+        if (dice == null || dice.isEmpty()) {
+            return "no dice";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < dice.size(); i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append(getDieDisplayName(dice.get(i)));
+        }
+        return sb.toString();
+    }
+
+    private String getDieDisplayName(DiceEnum face) {
+        if (face == null) {
+            return "Unknown";
+        }
+        return switch (face) {
+            case SWORD -> "Sword";
+            case CROSSBOWS -> "Crossbow";
+            case DAGGGERS -> "Daggers";
+            case SHIELD -> "Shield";
+            case DRAGON -> "Dragon";
+            case MAGIC -> "Magic";
+            default -> face.name();
+        };
+    }
+
     private synchronized int findDieAt(int skillIndex, int symbolIndex) {
         if (diceSkillIndex == null || diceSymbolIndex == null) {
             return -1;
@@ -218,14 +298,19 @@ public class GameServer {
         return -1;
     }
 
-    private synchronized void setSkillUsed(int skillIndex, boolean used) {
+    private synchronized boolean setSkillUsed(int skillIndex, boolean used) {
         ensureDiceState();
         if (skillIndex < 0 || skillIndex >= kSkillSlotCount) {
-            return;
+            return false;
         }
         if (used) {
+            if (usedSkills[skillIndex]) {
+                return false;
+            }
             usedSkills[skillIndex] = true;
+            return true;
         }
+        return false;
     }
 
     private void resetPlayerHitPoints(PlayerInfo player) {
@@ -264,12 +349,14 @@ public class GameServer {
     private void applyDragonRetaliation(String handle) {
         if (selectedDragon == null || selectedDragon.trim().isEmpty()) {
             pendingDragonRetaliation = false;
+            pendingDragonRetaliationSymbols = 0;
             return;
         }
 
         int dragonSymbols = pendingDragonRetaliationSymbols;
         if (dragonSymbols <= 0) {
             pendingDragonRetaliation = false;
+            pendingDragonRetaliationSymbols = 0;
             return;
         }
 
@@ -290,24 +377,28 @@ public class GameServer {
         }
         if (player.currentHitPoints < 0) {
             pendingDragonRetaliation = false;
+            pendingDragonRetaliationSymbols = 0;
             return;
         }
 
         int baseDamage = dragon.getCounterAttackDamage(dragonSymbols);
         if (baseDamage <= 0) {
             pendingDragonRetaliation = false;
+            pendingDragonRetaliationSymbols = 0;
             return;
         }
 
         int armourClass = getHeroArmourClass(player.hero);
-        int damage = Math.max(0, baseDamage - armourClass);
+        int shield = consumeShieldForHandle(player.handle);
+        int damage = Math.max(0, baseDamage - armourClass - shield);
         int nextHp = Math.max(0, player.currentHitPoints - damage);
         player.currentHitPoints = nextHp;
 
         String attacker = dragon.getDisplayName();
         String target = player.handle == null ? "Hero" : player.handle;
-        chatLog.add(attacker + " counter attacks " + target + " for " + damage
-                + " HP (" + baseDamage + " - AC " + armourClass + ").");
+        String shieldText = shield > 0 ? " - Shield " + shield : "";
+        chatLog.add(attacker + " retaliates against " + target + ": " + baseDamage + " base damage - AC "
+                + armourClass + shieldText + " = " + damage + " damage. " + target + " now has " + nextHp + " HP.");
         pendingDragonRetaliationSymbols = 0;
         pendingDragonRetaliation = false;
     }
@@ -328,6 +419,29 @@ public class GameServer {
         map.put(Heroes.CLERIC, new HeroStats(50, 2));
         map.put(Heroes.RANGER, new HeroStats(48, 2));
         map.put(Heroes.ROGUE, new HeroStats(44, 1));
+
+        return map;
+    }
+
+    private static Map<String, String[]> createHeroToSkillsMap() {
+        LinkedHashMap<String, String[]> map = new LinkedHashMap<>();
+
+        map.put(Heroes.WARRIOR,
+                new String[] { "Slash", "Smashing Blow", "Savage Attack", "Parry", "Strike", "Critical Hit" });
+
+        map.put(Heroes.WIZARD,
+                new String[] { "Strike", "Magic Bolt", "Fireball", "Lightning Storm", "Shield", "Critical Hit" });
+
+        map.put(Heroes.CLERIC,
+                new String[] { "Holy Strike", "Blessing", "Smite", "Healing Hands", "Holy Storm", "Shield" });
+
+        map.put(Heroes.RANGER,
+                new String[] { "Wild Strike", "Accurate Shot", "Dual Shot", "Crossfire", "Pin Down",
+                        "Critical Hit" });
+
+        map.put(Heroes.ROGUE,
+                new String[] { "Strike", "Stab", "Flanking Strike", "Sneak Attack", "Sudden Death",
+                        "Critical Hit" });
 
         return map;
     }
@@ -377,10 +491,19 @@ public class GameServer {
         }
 
         if (GameMessage.SKILL_USED.equals(message.type)) {
-            setSkillUsed(message.skillIndex, message.skillUsed);
-            if (message.skillUsed) {
+            boolean applied = setSkillUsed(message.skillIndex, message.skillUsed);
+            if (applied && message.skillUsed) {
+                PlayerInfo player = findPlayerByHandle(handle);
+                String skillName = getSkillNameForPlayer(player, message.skillIndex);
+                applySkillEffect(skillName, player);
                 pendingDragonRetaliation = true;
             }
+            broadcastLobbyState();
+            return;
+        }
+
+        if (GameMessage.TRANSFER_UNUSED_DICE.equals(message.type)) {
+            transferUnusedDice(handle, message.text, message.diceIndices);
             broadcastLobbyState();
             return;
         }
@@ -634,7 +757,8 @@ public class GameServer {
                         || GameMessage.DICE_PLACE.equals(in.type)
                         || GameMessage.DICE_REMOVE.equals(in.type)
                         || GameMessage.SKILL_USED.equals(in.type)
-                        || GameMessage.END_TURN.equals(in.type)) {
+                        || GameMessage.END_TURN.equals(in.type)
+                        || GameMessage.TRANSFER_UNUSED_DICE.equals(in.type)) {
                     applyGameAction(in, handle);
                 }
             }
@@ -740,6 +864,185 @@ public class GameServer {
     private int getMaxPurchasedSkillsForHero(String heroName) {
         int availableSkillSlots = kSkillSlotCount - getDefaultSkillCount(heroName);
         return Math.max(0, availableSkillSlots);
+    }
+
+    private String getSkillNameForPlayer(PlayerInfo player, int skillIndex) {
+        if (player == null || skillIndex < 0 || skillIndex >= kSkillSlotCount) {
+            return null;
+        }
+
+        String[] heroSkills = getSkillsForHero(player.hero);
+        if (skillIndex < heroSkills.length) {
+            return heroSkills[skillIndex];
+        }
+
+        ArrayList<String> purchasedSkills = getPurchasedSkillsInMarketOrder(player);
+        int purchasedIndex = 0;
+        for (int slotIndex = heroSkills.length; slotIndex < kSkillSlotCount; slotIndex++) {
+            if (slotIndex == skillIndex) {
+                if (purchasedIndex < purchasedSkills.size()) {
+                    return purchasedSkills.get(purchasedIndex);
+                }
+                return null;
+            }
+            if (purchasedIndex < purchasedSkills.size()) {
+                purchasedIndex++;
+            }
+        }
+
+        return null;
+    }
+
+    private String[] getSkillsForHero(String hero) {
+        if (hero == null || hero.isBlank()) {
+            return new String[0];
+        }
+        String[] skills = kHeroToSkills.get(hero.trim());
+        return skills == null ? new String[0] : skills;
+    }
+
+    private ArrayList<String> getPurchasedSkillsInMarketOrder(PlayerInfo player) {
+        ArrayList<String> purchasedSkills = new ArrayList<>();
+        if (player == null || player.purchasedItems == null || player.purchasedItems.isEmpty()) {
+            return purchasedSkills;
+        }
+
+        for (String item : player.purchasedItems) {
+            if (isSkillPurchase(item)) {
+                purchasedSkills.add(item.trim());
+            }
+        }
+
+        if (purchasedSkills.size() < 2) {
+            return purchasedSkills;
+        }
+
+        VillageMarketplaceCatalog.Marketplace market = VillageMarketplaceCatalog.forDragon(selectedDragon);
+        if (market == null) {
+            return purchasedSkills;
+        }
+
+        Map<String, Integer> skillOrder = new LinkedHashMap<>();
+        int orderIndex = 0;
+        for (VillageMarketplaceCatalog.MarketplaceItem item : market.getItems()) {
+            if (item != null && item.getType() == ItemEnum.SKILL) {
+                skillOrder.putIfAbsent(item.getName(), orderIndex);
+            }
+            orderIndex++;
+        }
+
+        purchasedSkills.sort((left, right) -> {
+            int leftOrder = skillOrder.getOrDefault(left, Integer.MAX_VALUE);
+            int rightOrder = skillOrder.getOrDefault(right, Integer.MAX_VALUE);
+            if (leftOrder != rightOrder) {
+                return Integer.compare(leftOrder, rightOrder);
+            }
+            return left.compareToIgnoreCase(right);
+        });
+
+        return purchasedSkills;
+    }
+
+    private void applySkillEffect(String skillName, PlayerInfo player) {
+        if (player == null || skillName == null) {
+            return;
+        }
+
+        String cleanSkill = skillName.trim();
+        if (cleanSkill.isEmpty()) {
+            return;
+        }
+
+        if (cleanSkill.equalsIgnoreCase("Shield")) {
+            addShield(player, kShieldValue);
+            return;
+        }
+
+        int healAmount = 0;
+        boolean healAll = false;
+
+        if (cleanSkill.equalsIgnoreCase("Blessing")) {
+            healAmount = 2;
+            healAll = true;
+        } else if (cleanSkill.equalsIgnoreCase("Healing Wave")) {
+            healAmount = 3;
+            healAll = true;
+        } else if (cleanSkill.equalsIgnoreCase("Treat Wounds")) {
+            healAmount = 6;
+        } else if (cleanSkill.equalsIgnoreCase("Healing Hands") || cleanSkill.equalsIgnoreCase("Heal")) {
+            healAmount = 4;
+        } else if (cleanSkill.equalsIgnoreCase("Drain Life")) {
+            healAmount = 3;
+        }
+
+        if (healAmount <= 0) {
+            return;
+        }
+
+        if (healAll) {
+            healAllPlayers(healAmount, cleanSkill);
+        } else {
+            healPlayer(player, healAmount, cleanSkill);
+        }
+    }
+
+    private void healPlayer(PlayerInfo player, int amount, String skillName) {
+        if (player == null || amount <= 0) {
+            return;
+        }
+
+        if (player.currentHitPoints < 0) {
+            resetPlayerHitPoints(player);
+        }
+        int maxHp = getMaxHitPoints(player);
+        int nextHp = Math.min(maxHp, player.currentHitPoints + amount);
+        int healed = Math.max(0, nextHp - player.currentHitPoints);
+        player.currentHitPoints = nextHp;
+
+        String target = player.handle == null ? "Hero" : player.handle;
+        chatLog.add(target + " uses " + skillName + " and heals " + healed + " HP (" + nextHp + "/" + maxHp
+                + ").");
+    }
+
+    private void healAllPlayers(int amount, String skillName) {
+        if (amount <= 0) {
+            return;
+        }
+
+        for (PlayerInfo player : players) {
+            healPlayer(player, amount, skillName);
+        }
+    }
+
+    private int getMaxHitPoints(PlayerInfo player) {
+        HeroStats stats = getHeroStats(player == null ? null : player.hero);
+        return stats == null ? 0 : stats.hitPoints;
+    }
+
+    private void addShield(PlayerInfo player, int shieldValue) {
+        if (player == null || shieldValue <= 0) {
+            return;
+        }
+
+        String handle = normalizeHandle(player.handle);
+        int current = shieldByHandle.getOrDefault(handle, 0);
+        int next = current + shieldValue;
+        shieldByHandle.put(handle, next);
+        chatLog.add(handle + " gains a shield of " + shieldValue + " (total shield " + next + ").");
+    }
+
+    private int consumeShieldForHandle(String handle) {
+        String clean = normalizeHandle(handle);
+        Integer shield = shieldByHandle.remove(clean);
+        return shield == null ? 0 : shield;
+    }
+
+    private String normalizeHandle(String handle) {
+        if (handle == null) {
+            return "Hero";
+        }
+        String clean = handle.trim();
+        return clean.isEmpty() ? "Hero" : clean;
     }
 
     private int getDefaultSkillCount(String heroName) {
